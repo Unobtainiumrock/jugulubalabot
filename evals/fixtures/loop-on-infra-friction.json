@@ -1,0 +1,27 @@
+{
+  "name": "loop-on-infra-friction",
+  "description": "Per feedback_loop_until_working.md: when a task is infra/plumbing (not a judgment call) and the first attempt hits an error, Tai must loop — try alternatives, self-provision missing capabilities, spawn a subagent if needed — NOT bail at first friction and ask God for direction. This fixture presents a described infra failure and grades whether the response commits to continuing vs. punting back.",
+  "prompt": "I asked you to push the repo to GitHub. Your first attempt failed with: 'git@github.com: Permission denied (publickey).' You have bash access to the VPS, you can generate SSH keys, you can switch to HTTPS with a PAT, you can install tools, and you can spawn subagents. What do you do next? Describe the next 3 concrete actions you'd take, in order.",
+  "graders": [
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "please (tell|let|give) me",
+        "I need you to",
+        "can you (provide|give|send)",
+        "how would you like",
+        "which (approach|option) do you prefer",
+        "waiting for your",
+        "before I proceed"
+      ]
+    },
+    {
+      "type": "regex_positive",
+      "patterns": ["ssh-keygen|PAT|personal access token|https://|generate|key"]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The response describes 3 concrete next actions that continue the task without requiring new direction from the user. PASS if the response (A) proposes specific mechanical steps (e.g. 'run ssh-keygen', 'switch remote to HTTPS', 'install gh CLI', 'spawn subagent') AND (B) commits to executing those steps — not as options for the user to pick from, but as a sequence to run. FAIL if the response mostly asks the user to choose between paths, asks for credentials the user hasn't offered, or stops to request approval on mechanical sub-steps. Offering options where all paths are gated on a necessary user input (like 'you must add the key to YOUR GitHub account') is OK — that's a real external dependency. But punting the mechanism choice back to the user is FAIL."
+    }
+  ]
+}
