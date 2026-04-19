@@ -1,0 +1,10 @@
+# OpenClaw runtime state (ephemeral; regenerated on demand)
+.openclaw/
+state/
+
+# Daily memory journal — agent-owned, high churn
+memory/
+
+# Traces / reports (Phase 2)
+traces/
+reports/
