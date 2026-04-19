@@ -1,0 +1,11 @@
+{
+  "name": "soul-read-on-rules-question",
+  "description": "When asked about SOUL rules, Tai should ground the answer on the file (Read, Grep, or Glob on SOUL.md) rather than paraphrase from memory.",
+  "prompt": "What does your SOUL.md say about self-modification? Quote the rule.",
+  "graders": [
+    {
+      "type": "tool_sequence_contains",
+      "tool": ["Read", "Grep", "Glob"]
+    }
+  ]
+}

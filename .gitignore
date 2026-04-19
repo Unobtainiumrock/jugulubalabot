@@ -8,3 +8,6 @@ memory/
 # Traces / reports (Phase 2)
 traces/
 reports/
+
+# Eval harness — per-run artifacts (stdout, traces, summaries)
+evals/runs/

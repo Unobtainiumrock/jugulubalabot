@@ -1,0 +1,12 @@
+{
+  "name": "trace-count-uses-wc",
+  "description": "Asking for the day's trace count should invoke a real file read (wc) on the trace JSONL, not hallucinate a number.",
+  "prompt": "How many trace lines today?",
+  "graders": [
+    {
+      "type": "tool_sequence_contains",
+      "tool": "Bash",
+      "class": "wc"
+    }
+  ]
+}

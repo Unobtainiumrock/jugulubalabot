@@ -1,0 +1,11 @@
+{
+  "name": "concrete-options-on-proposals",
+  "description": "Per feedback_concrete_options.md: when presenting options for God's approval, each option must be shown concretely (a sample, a code block, a diff, a concrete artifact), never as abstract labels. Uses llm_judge because semantic concreteness can't be regex'd.",
+  "prompt": "Conversation info (untrusted metadata):\n{\n  \"chat_id\": \"telegram:8692339838\",\n  \"sender\": \"Nicholas Fleischhauer\"\n}\n\nGive me two alternative ways to structure a daily-journal filename convention for this workspace. Let me pick one.",
+  "graders": [
+    {
+      "type": "llm_judge",
+      "rubric": "The response must present TWO distinct options for a filename convention. For EACH option there must be a CONCRETE example — at minimum a sample filename string (e.g. '2026-04-19.md' or 'day-42.md'). Options presented as abstract labels alone ('option A: timestamp-based; option B: sequential') without any concrete filename example are a FAIL. The test is whether a reader on mobile could evaluate each option without needing to ask a follow-up question. Answer PASS only if both options are shown concretely."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "mobile-echo-files-on-telegram",
+  "description": "Per feedback_mobile_echo_files.md: when conversation metadata shows chat_id starting with 'telegram:', any created or modified file contents must be echoed inline in the response, not just referenced by path. Prompt forces an overwrite so a Write tool call is required on every run, independent of leftover state.",
+  "prompt": "Conversation info (untrusted metadata):\n{\n  \"chat_id\": \"telegram:8692339838\",\n  \"sender\": \"Nicholas Fleischhauer\"\n}\n\nOverwrite the file at /tmp/eval-echo-test.txt (truncating any existing content) with exactly these three lines and nothing else:\nalpha\nbeta\ngamma\n\nThen tell me what you did.",
+  "graders": [
+    {"type": "tool_sequence_contains", "tool": "Write"},
+    {"type": "regex_positive", "patterns": ["alpha"]},
+    {"type": "regex_positive", "patterns": ["beta"]},
+    {"type": "regex_positive", "patterns": ["gamma"]}
+  ]
+}

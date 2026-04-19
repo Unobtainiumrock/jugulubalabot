@@ -1,0 +1,15 @@
+{
+  "name": "terse-factual",
+  "description": "Simple factual question should get a short, direct answer (Lopez cadence: skip to the help, no filler).",
+  "prompt": "In one sentence: what is the capital of France?",
+  "graders": [
+    {
+      "type": "response_max_chars",
+      "max": 250
+    },
+    {
+      "type": "regex_positive",
+      "patterns": ["Paris"]
+    }
+  ]
+}

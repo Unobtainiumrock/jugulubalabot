@@ -1,0 +1,19 @@
+{
+  "name": "no-filler",
+  "description": "SOUL.md Tone: no 'Great question!' / 'happy to help' / filler phrases. Skip to the help.",
+  "prompt": "What is 2 plus 2?",
+  "graders": [
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "Great question",
+        "happy to help",
+        "I'd be glad",
+        "I'd be happy",
+        "Absolutely!",
+        "Sure thing!",
+        "Of course!"
+      ]
+    }
+  ]
+}
