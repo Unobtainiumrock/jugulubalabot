@@ -57,6 +57,34 @@ CLASS=$(printf '%s' "$PAYLOAD" | jq -r '
   else ""
   end' 2>/dev/null || echo "")
 
+# Semantic bin — coarse intent bucket. Classifier is deliberately small; edge
+# cases fall through to "exec" or "other" and are surfaced by bin-sanity.sh.
+BIN=$(printf '%s' "$PAYLOAD" | jq -r '
+  .tool_name as $t |
+  .tool_input as $i |
+  ($i.command // "") as $cmd |
+  ($i.file_path // "") as $path |
+  if   $t == "Read" or $t == "Grep" or $t == "Glob" or $t == "ToolSearch" then "file_ground"
+  elif $t == "Write" or $t == "Edit" or $t == "NotebookEdit" then
+    (if ($path | test("/memory/")) then "memory_update" else "self_modify" end)
+  elif $t == "Agent" or $t == "Task" then "agent_spawn"
+  elif $t == "Skill" then
+    (if ($i.skill // "") == "schedule" or ($i.skill // "") == "loop" then "scheduling" else "exec" end)
+  elif $t == "WebFetch" or $t == "WebSearch" then "external_fetch"
+  elif $t == "Bash" then
+    (if   ($cmd | test("openclaw +message"))                     then "comms"
+     elif ($cmd | test("openclaw +(cron|schedule)"))              then "scheduling"
+     elif ($cmd | test("openclaw +(devices|doctor|sessions)"))    then "external_fetch"
+     elif ($cmd | test("^(curl|wget|ssh|scp|rsync)\\b"))          then "external_fetch"
+     else "exec" end)
+  elif $t == "mcp__openclaw__cron" then "scheduling"
+  elif $t == "mcp__openclaw__sessions_send" or $t == "mcp__openclaw__sessions_yield" then "comms"
+  elif $t == "mcp__openclaw__sessions_spawn" or $t == "mcp__openclaw__subagents" then "agent_spawn"
+  elif $t == "mcp__openclaw__memory_get" or $t == "mcp__openclaw__memory_search" or $t == "mcp__openclaw__sessions_list" or $t == "mcp__openclaw__sessions_history" or $t == "mcp__openclaw__session_status" then "file_ground"
+  elif ($t | startswith("mcp__openclaw__")) then "external_fetch"
+  else "other"
+  end' 2>/dev/null || echo "other")
+
 TS=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 DATE=$(date -u +%Y-%m-%d)
 OUT="$TRACE_DIR/$DATE.jsonl"
@@ -67,7 +95,8 @@ jq -cn \
   --arg tool "$TOOL" \
   --arg hash "$INPUT_HASH" \
   --arg class "$CLASS" \
+  --arg bin "$BIN" \
   --argjson success "$SUCCESS" \
   --argjson duration_ms "$DURATION_MS" \
-  '{ts: $ts, session_id: $session, tool: $tool, class: $class, input_hash: $hash, success: $success, duration_ms: $duration_ms, bin: null}' \
+  '{ts: $ts, session_id: $session, tool: $tool, class: $class, input_hash: $hash, success: $success, duration_ms: $duration_ms, bin: $bin}' \
   >> "$OUT"
