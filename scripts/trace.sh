@@ -6,8 +6,9 @@
 set -euo pipefail
 
 MODE="${1:-post}"
-TRACE_DIR="/root/.openclaw/workspace/traces"
-SIDECAR_DIR="/root/.openclaw/workspace/state/trace-inflight"
+# Paths overridable via env for sandbox/test runs (see scripts/trace-sandbox.sh).
+TRACE_DIR="${TRACE_DIR:-/root/.openclaw/workspace/traces}"
+SIDECAR_DIR="${SIDECAR_DIR:-/root/.openclaw/workspace/state/trace-inflight}"
 mkdir -p "$TRACE_DIR" "$SIDECAR_DIR"
 
 PAYLOAD=$(cat)

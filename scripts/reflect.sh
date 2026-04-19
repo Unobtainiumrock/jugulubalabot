@@ -22,6 +22,12 @@ fi
 
 mkdir -p "$OUT_DIR"
 
+# Token accounting — refresh today's turn data if transcripts exist
+TURNS_FILE="$WORKSPACE/turns/$DATE.jsonl"
+if [ -d "/root/.claude/projects/-root--openclaw-workspace" ]; then
+  bash "$WORKSPACE/scripts/token-accounting.sh" "$DATE" >/dev/null 2>&1 || true
+fi
+
 TOTAL=$(wc -l < "$TRACE" | tr -d ' ')
 SESSIONS=$(jq -r '.session_id' "$TRACE" | sort -u | wc -l | tr -d ' ')
 SUCCESS=$(jq -r 'select(.success == true) | .tool' "$TRACE" | wc -l | tr -d ' ')
@@ -63,6 +69,33 @@ DURATION_STATS=$(jq -r 'select(.duration_ms != null) | [.tool, .duration_ms] | @
       }
     }' | sort -t'|' -k3 -rn)
 
+# Cost aggregates from turns file
+COST_SECTION="_no transcript data_"
+if [ -f "$TURNS_FILE" ] && [ -s "$TURNS_FILE" ]; then
+  COST_SECTION=$(jq -s '
+    {
+      turns: length,
+      sessions: (map(.session_id) | unique | length),
+      cost_usd: ((map(.cost_cents) | add) / 100),
+      input_tokens: (map(.input_tokens) | add),
+      output_tokens: (map(.output_tokens) | add),
+      cache_write: (map(.cache_write_tokens) | add),
+      cache_read: (map(.cache_read_tokens) | add)
+    }
+    | "| Turns | Sessions | Cost USD | In tok | Out tok | Cache write | Cache read |
+|-------|----------|----------|--------|---------|-------------|------------|
+| \(.turns) | \(.sessions) | $\(.cost_usd | . * 100 | round / 100) | \(.input_tokens) | \(.output_tokens) | \(.cache_write) | \(.cache_read) |"
+  ' "$TURNS_FILE" -r)
+fi
+
+# Top 5 most expensive turns (for token-burn candidate detection)
+TOP_COST=$(jq -s 'sort_by(-.cost_cents) | .[0:5] | .[]
+  | "| $\(.cost_cents / 100 | . * 100 | round / 100) | \(.ts | split("T")[1] | split(".")[0]) | \(.tools | join(",") // "—") | \(.output_tokens) out |"' \
+  "$TURNS_FILE" -r 2>/dev/null)
+if [ -z "$TOP_COST" ]; then
+  TOP_COST="| _no data_ |  |  |  |"
+fi
+
 # Repeated input_hashes (≥3x = deterministic-conversion candidate)
 REPEATS=$(jq -r '[.tool, .class // "—", .input_hash] | @tsv' "$TRACE" \
   | sort | uniq -c | sort -rn \
@@ -70,6 +103,15 @@ REPEATS=$(jq -r '[.tool, .class // "—", .input_hash] | @tsv' "$TRACE" \
   | head -10)
 if [ -z "$REPEATS" ]; then
   REPEATS="| _none — no input_hash repeated ≥3× today_ |  |  |  |"
+fi
+
+# Open backlog (active items from backlog.jsonl)
+BACKLOG_FILE="$WORKSPACE/backlog.jsonl"
+BACKLOG_SECTION="_backlog empty_"
+if [ -f "$BACKLOG_FILE" ] && [ -s "$BACKLOG_FILE" ]; then
+  BACKLOG_SECTION=$(jq -r 'select(.status == "open" or .status == "doing")
+    | "| \(.id) | \(.status) | \(.priority) | \(.title) |"' "$BACKLOG_FILE")
+  if [ -z "$BACKLOG_SECTION" ]; then BACKLOG_SECTION="_no active items_"; fi
 fi
 
 # Failure rows (full JSON, one per line, capped)
@@ -102,6 +144,16 @@ $TOOL_BREAKDOWN
 |------------------|-------|--------|
 $BIN_BREAKDOWN
 
+## Cost ($DATE)
+
+$COST_SECTION
+
+**Top 5 most expensive turns (token-burn candidates):**
+
+| Cost | Time (UTC) | Tools | Output tokens |
+|------|------------|-------|---------------|
+$TOP_COST
+
 ## Top 15 (tool × class)
 
 | Tool                 | Class                | Count |
@@ -123,6 +175,12 @@ $REPEATS
 ## Failures
 
 $FAIL_ROWS
+
+## Active backlog
+
+| ID | Status | Priority | Title |
+|----|--------|----------|-------|
+$BACKLOG_SECTION
 
 ---
 

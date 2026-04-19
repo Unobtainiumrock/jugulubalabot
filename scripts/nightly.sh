@@ -27,8 +27,11 @@ if [ "$EVAL_EXIT" -ne 0 ]; then
   OVERALL=1
 fi
 
-# --- 2. Bin classifier health on yesterday's traces -----------------------
+# --- 2. Token accounting for yesterday (runs silent; just refreshes data) --
 YESTERDAY=$(date -u -d "yesterday" +%F)
+bash "$WORKSPACE/scripts/token-accounting.sh" "$YESTERDAY" >/dev/null 2>&1 || true
+
+# --- 3. Bin classifier health on yesterday's traces -----------------------
 BIN_OUTPUT=$(bash "$WORKSPACE/scripts/bin-sanity.sh" "$YESTERDAY" 2>&1)
 BIN_EXIT=$?
 

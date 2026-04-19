@@ -5,9 +5,13 @@ state/
 # Daily memory journal — agent-owned, high churn
 memory/
 
-# Traces / reports (Phase 2)
+# Traces / reports / per-turn token accounting (Phase 2)
 traces/
 reports/
+turns/
+
+# Backlog — agent-owned high-churn joint task queue
+backlog.jsonl
 
 # Eval harness — per-run artifacts (stdout, traces, summaries)
 evals/runs/
