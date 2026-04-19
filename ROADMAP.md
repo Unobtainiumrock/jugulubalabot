@@ -9,18 +9,24 @@ Turn Tai into a self-improving system along two axes:
 1. **Agentic improvement** — per *Autogenesis: A Self-Evolving Agent Protocol* (Wentao Zhang, arXiv:2604.15034). Two-layer protocol: RSPL (prompts/agents/tools/env/memory as versioned resources) + SEPL (closed-loop operator algebra: Reflect → Select → Improve → Evaluate → Commit).
 2. **Model improvement** — per God's `autoresearch` repo (https://github.com/Unobtainiumrock/autoresearch). Out of scope for the single-agent loop; relevant at the research-output layer.
 
-## Instrumentation (prerequisite)
+## Instrumentation (LIVE as of 2026-04-19)
 
-Before any loop runs, we need trace data. Every skill invocation should log:
+Trace data collection is wired. Every tool call (not just skills) produces one JSONL entry in `workspace/traces/YYYY-MM-DD.jsonl` with:
 
-- `timestamp`, `session_id`, `skill_name`
-- `input_shape` (hash + rough class)
-- `success` (bool), `duration_ms`
-- `bin` (task taxonomy category; may be assigned retroactively)
+- `ts` (ms precision, UTC)
+- `session_id`, `tool`
+- `class` — rough shape: Bash=first-token, Skill=skill-name, Read/Write/Edit=ext, Grep=simple|complex, etc.
+- `input_hash` (12 hex chars, sha256 of canonicalized `tool_input`)
+- `success` (bool), `duration_ms` (null if PreToolUse didn't fire)
+- `bin` (null; reserved for retroactive taxonomy)
 
-Storage: JSONL, daily rotation, under `workspace/traces/YYYY-MM-DD.jsonl`.
+**Wiring:**
+- `.claude/settings.json` — PreToolUse / PostToolUse / PostToolUseFailure hooks, all async.
+- `scripts/trace.sh` — writer. Modes: `pre` (timestamp sidecar) / `ok` / `fail`.
+- `scripts/trace-summary.sh [YYYY-MM-DD]` — daily rollup (counts, class breakdown, success rate, p50/p95 duration).
+- Sidecars live under `workspace/state/trace-inflight/` and are consumed on post.
 
-Target ~100+ invocations before the first reflection pass has enough signal to bin into a real taxonomy.
+Target: ~100+ invocations before the first reflection pass has enough signal to bin into a real taxonomy.
 
 ## Nightly batch (cron)
 
@@ -47,12 +53,12 @@ Target ~100+ invocations before the first reflection pass has enough signal to b
 
 When a task pattern appears >N times (N TBD empirically, start ~5) and is structurally amenable to a deterministic function, propose converting it. Once approved and written, the deterministic path becomes the primary; the LLM path becomes the fallback.
 
-## When to activate
+## When to activate the Reflect loop
 
-Tai should nudge God to activate Phase 2 when any of:
+Instrumentation is live — signal is accumulating. Tai should nudge God to activate the nightly Reflect→Select→Improve→Evaluate→Commit loop when any of:
 
 - ≥ a week of active daily use
-- ≥ 100 skill invocations logged
+- ≥ 100 tool invocations logged (check: `scripts/trace-summary.sh`)
 - A repeated pain pattern visible to both parties
 
 Do not activate unilaterally. Activation is an explicit conversation and an explicit cron-wiring step.

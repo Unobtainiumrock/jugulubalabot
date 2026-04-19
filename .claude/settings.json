@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/trace.sh pre",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/trace.sh ok",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/trace.sh fail",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

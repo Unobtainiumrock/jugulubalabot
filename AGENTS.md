@@ -122,6 +122,16 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
 
+### Tracing (Phase 2 instrumentation)
+
+Every tool call is logged to `traces/YYYY-MM-DD.jsonl` via PreToolUse/PostToolUse hooks. To inspect your own activity:
+
+- `scripts/trace-summary.sh` — today's rollup.
+- `scripts/trace-summary.sh YYYY-MM-DD` — a specific day.
+- Raw JSONL if you want to grep. Fields: `ts, session_id, tool, class, input_hash, success, duration_ms, bin`.
+
+When a pattern stands out (token-burn on repeat task, failing class, etc.), surface it to God per `ROADMAP.md`.
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**
