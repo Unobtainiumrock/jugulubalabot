@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Phase 2 trace writer. One JSONL line per tool call.
-# Invoked by hooks with first arg "pre" | "ok" | "fail".
-#   pre  -> record start timestamp (sidecar file)
-#   ok   -> PostToolUse: consume sidecar, compute duration, append success
-#   fail -> PostToolUseFailure: same but success=false
+# Invoked by hooks with first arg "pre" | "post".
+#   pre   -> record start timestamp (sidecar file)
+#   post  -> consume sidecar, compute duration, read success from payload
 set -euo pipefail
 
-MODE="${1:-ok}"
+MODE="${1:-post}"
 TRACE_DIR="/root/.openclaw/workspace/traces"
 SIDECAR_DIR="/root/.openclaw/workspace/state/trace-inflight"
 mkdir -p "$TRACE_DIR" "$SIDECAR_DIR"
@@ -26,8 +25,11 @@ if [ "$MODE" = "pre" ]; then
   exit 0
 fi
 
-SUCCESS="true"
-[ "$MODE" = "fail" ] && SUCCESS="false"
+# PostToolUse payload carries tool_response; treat explicit is_error/error as failure
+SUCCESS=$(printf '%s' "$PAYLOAD" | jq -r '
+  if (.tool_response.is_error // false) == true then "false"
+  elif (.tool_response.error // null) != null then "false"
+  else "true" end' 2>/dev/null || echo "true")
 
 DURATION_MS="null"
 if [ -f "$SIDECAR" ]; then

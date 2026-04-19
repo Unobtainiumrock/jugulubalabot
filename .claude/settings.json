@@ -2,6 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -13,21 +14,11 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "/root/.openclaw/workspace/scripts/trace.sh ok",
-            "async": true
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/root/.openclaw/workspace/scripts/trace.sh fail",
+            "command": "/root/.openclaw/workspace/scripts/trace.sh post",
             "async": true
           }
         ]
