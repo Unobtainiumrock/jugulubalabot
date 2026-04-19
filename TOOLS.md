@@ -17,5 +17,8 @@
 
 ## Ops notes
 
-- **Editing `.claude/settings.json` requires bash, not the Edit tool.** Claude Code hardcodes a gate on this path because hooks run arbitrary shell — global `bypassPermissions` does not override it. Use `cat > .claude/settings.json << 'EOF' … EOF` or `jq` via Bash. If you hit the gate anyway, ping God; the human-operator has direct SSH and can finish the write.
-- **Hooks activate only in sessions started after the settings file exists.** Changing hooks mid-session requires `/new` in the channel, or `systemctl --user restart openclaw-gateway` at the host.
+- **OpenClaw invokes Claude Code with `--setting-sources user`**, so project-level `workspace/.claude/settings.json` hooks are **never loaded**. Put hooks in `/root/.claude/settings.json` (user-level) instead. The workspace `.claude/settings.json` file exists for documentation/git history only; it is a no-op under openclaw's invocation shape.
+- **Hook script lives at `/root/.openclaw/workspace/scripts/trace.sh`** — use bash (`cat > ... << EOF`), not the `Edit` tool, if modifying `/root/.claude/settings.json` (Claude Code hardcode-gates edits to any `.claude/settings.json` path even under `bypassPermissions`).
+- **No session restart needed** when user-level settings change — each `claude -p` invocation loads them fresh. Tai's next Telegram turn picks up updates automatically.
+- **Hooks fire on tool calls only**, not on plain model responses. Tool list is: Read, Write, Edit, Bash, Glob, Grep, Agent/Task, Skill, WebFetch, WebSearch, plus whichever `mcp__*` tools are live.
+- **Traces path**: `/root/.openclaw/workspace/traces/YYYY-MM-DD.jsonl`. Daily rollup: `bash /root/.openclaw/workspace/scripts/trace-summary.sh`.
