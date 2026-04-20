@@ -25,6 +25,16 @@ from traces. The Track 3 first-pass Reflect consumes both.
 
 ## 2026-04-20
 
+- **08:45** — Round-two capabilities (wave II of wishlist): pre-Bash
+  guard hook (prevents cd/cat/grep/find/echo Bash anti-patterns with
+  teaching messages + kill switches), budget-peek `--risk` for
+  compaction-proximity (uses cache_read+cache_write+input from latest
+  turn; current session currently YELLOW at 143k), `mistake-to-fixture`
+  helper closing the Reflect→Evaluate loop, and weekly
+  `dead-skill-check.sh` surfacing retire candidates. Guard script
+  pipe-tested; settings.json wiring awaiting God approval (file is
+  permission-gated even in bypassPermissions mode — safety rail).
+  → `memory/project_capabilities_20260420.md`
 - **08:35** — Four self-service capabilities shipped in one pass after
   God asked "what capabilities do you wish you had": (1) pre-commit
   eval selector with `FIXTURES=` filter, (2) `state/scratch.md`

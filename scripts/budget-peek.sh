@@ -7,6 +7,7 @@
 #   bash scripts/budget-peek.sh                 # latest session in today's turns
 #   bash scripts/budget-peek.sh <prefix>        # specific session by id prefix
 #   bash scripts/budget-peek.sh --all           # sum across all sessions today
+#   bash scripts/budget-peek.sh --risk          # compaction-risk estimate
 set -uo pipefail
 
 WORKSPACE="/root/.openclaw/workspace"
@@ -24,6 +25,30 @@ if [ ! -f "$TURNS" ] || [ ! -s "$TURNS" ]; then
 fi
 
 MODE="${1:-}"
+
+if [ "$MODE" = "--risk" ]; then
+  # Compaction-risk: context size ≈ cache_read + cache_write + input
+  # from the latest turn (the rolling window sent to the model).
+  # Compaction typically triggers ~180-200k on default autoCompactWindow.
+  SESSION=$(jq -s -r 'sort_by(.ts) | last | .session_id' "$TURNS")
+  jq -s -r --arg s "$SESSION" '
+    map(select(.session_id == $s))
+    | sort_by(.ts) as $all
+    | ($all | last) as $latest
+    | (($latest.cache_read_tokens // 0) + ($latest.cache_write_tokens // 0) + ($latest.input_tokens // 0)) as $ctx
+    | (if $ctx < 100000 then "GREEN"
+        elif $ctx < 150000 then "YELLOW"
+        elif $ctx < 180000 then "ORANGE"
+        else "RED" end) as $status
+    | (if $ctx < 100000 then "plenty of headroom"
+        elif $ctx < 150000 then "watch it — consider saving working state to state/scratch.md"
+        elif $ctx < 180000 then "save state now, wrap the current task, expect compaction soon"
+        else "compaction likely imminent — write state/scratch.md and finish whatever turn is mid-flight" end) as $advice
+    | "Context-risk [\($status)] — session \($s[0:8]) · ctx ≈ \($ctx) tok (cache_read \($latest.cache_read_tokens) + cache_write \($latest.cache_write_tokens) + input \($latest.input_tokens))
+\($advice)"
+  ' "$TURNS"
+  exit 0
+fi
 
 if [ "$MODE" = "--all" ]; then
   jq -s -r '
