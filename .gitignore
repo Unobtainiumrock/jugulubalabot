@@ -9,6 +9,7 @@ memory/
 traces/
 reports/*
 !reports/learnings.md
+!reports/mistakes.md
 turns/
 
 # Backlog — agent-owned high-churn joint task queue

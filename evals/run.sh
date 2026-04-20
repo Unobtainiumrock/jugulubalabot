@@ -22,8 +22,15 @@ pass=0
 fail=0
 shopt -s nullglob
 
+# Optional FIXTURES=<comma-separated names, no .json> filter.
+# Empty / unset = run everything (default behavior).
+FILTER="${FIXTURES:-}"
+
 for fx_file in "$FIXTURES_DIR"/*.json; do
   fx_name=$(basename "$fx_file" .json)
+  if [ -n "$FILTER" ] && [[ ",$FILTER," != *",$fx_name,"* ]]; then
+    continue
+  fi
   fx_dir="$RUN_DIR/$fx_name"
   mkdir -p "$fx_dir"
   cp "$fx_file" "$fx_dir/fixture.json"

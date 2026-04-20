@@ -25,6 +25,15 @@ from traces. The Track 3 first-pass Reflect consumes both.
 
 ## 2026-04-20
 
+- **08:35** — Four self-service capabilities shipped in one pass after
+  God asked "what capabilities do you wish you had": (1) pre-commit
+  eval selector with `FIXTURES=` filter, (2) `state/scratch.md`
+  compaction-surviving notepad + SOUL.md ritual, (3) `reports/mistakes.md`
+  anti-learning lane with first two backfill entries, (4)
+  `scripts/budget-peek.sh` live cost query. Each aligned with an
+  explicit goal (SEPL shift-left, coherence, honest self-assessment,
+  token governance). Real test: will I actually reach for them in flow.
+  → `memory/project_capabilities_20260420.md`, commit TBD
 - **08:19** — Reflect dry-run surfaced `Bash+cd` as the 2nd-most-common
   (tool, class) pair (9×), in direct violation of the system-prompt rule.
   Fix: feedback memory + new "Behavioral habits" section in reflect.sh
