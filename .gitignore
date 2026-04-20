@@ -7,7 +7,8 @@ memory/
 
 # Traces / reports / per-turn token accounting (Phase 2)
 traces/
-reports/
+reports/*
+!reports/learnings.md
 turns/
 
 # Backlog — agent-owned high-churn joint task queue
