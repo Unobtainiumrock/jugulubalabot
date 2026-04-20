@@ -176,6 +176,22 @@ FIND_COUNT=$(jq -r 'select(.tool == "Bash" and .class == "find") | 1' "$TRACE" |
 HABITS_SECTION=$(printf '| Pattern | Count | Guidance |\n|---------|-------|----------|\n| `cd` prefix | %d | Bash cwd persists — use absolute paths / `git -C` |\n| `echo` | %d | Prefer direct text output over echo |\n| `cat` | %d | Prefer Read tool over cat |\n| `grep`/`rg` via Bash | %d | Use Grep tool, not Bash |\n| `find` via Bash | %d | Use Glob tool, not Bash find |\n' \
   "$CD_COUNT" "$ECHO_COUNT" "$CAT_COUNT" "$GREP_COUNT" "$FIND_COUNT")
 
+# OpenClaw primitive usage — are we leveraging OpenClaw as intended?
+MCP_OPENCLAW_COUNT=$(jq -r 'select(.tool | startswith("mcp__openclaw__")) | 1' "$TRACE" | wc -l | tr -d ' ')
+MCP_OPENCLAW_BREAKDOWN=$(jq -r 'select(.tool | startswith("mcp__openclaw__")) | .tool' "$TRACE" \
+  | sort | uniq -c | sort -rn \
+  | awk '{printf "| %-40s | %5d |\n", $2, $1}')
+if [ -z "$MCP_OPENCLAW_BREAKDOWN" ]; then
+  MCP_OPENCLAW_BREAKDOWN="| _no mcp__openclaw__ calls — under-leveraging OpenClaw MCP_ | 0 |"
+fi
+SKILL_OPENCLAW_COUNT=$(jq -r 'select(.tool == "Skill" and ((.class // "") | test("openclaw-skills"))) | 1' "$TRACE" | wc -l | tr -d ' ')
+SKILL_OPENCLAW_BREAKDOWN=$(jq -r 'select(.tool == "Skill" and ((.class // "") | test("openclaw-skills"))) | .class' "$TRACE" \
+  | sort | uniq -c | sort -rn \
+  | awk '{printf "| %-40s | %5d |\n", $2, $1}')
+if [ -z "$SKILL_OPENCLAW_BREAKDOWN" ]; then
+  SKILL_OPENCLAW_BREAKDOWN="| _no openclaw-skills invoked_ | 0 |"
+fi
+
 cat > "$OUT" <<EOF
 # Reflect — $DATE
 
@@ -257,6 +273,22 @@ $DELTA_SECTION
 ## Behavioral habits (system-prompt violation counts)
 
 $HABITS_SECTION
+
+## OpenClaw primitive usage
+
+_Are we leveraging OpenClaw as intended? Zero use ≠ fine — means CC-native habits are winning when an OpenClaw primitive was appropriate._
+
+**MCP tools (\`mcp__openclaw__*\`):** $MCP_OPENCLAW_COUNT invocations
+
+| Tool                                     | Count |
+|------------------------------------------|-------|
+$MCP_OPENCLAW_BREAKDOWN
+
+**OpenClaw skills (\`openclaw-skills:*\`):** $SKILL_OPENCLAW_COUNT invocations
+
+| Skill                                    | Count |
+|------------------------------------------|-------|
+$SKILL_OPENCLAW_BREAKDOWN
 
 ## Active backlog
 

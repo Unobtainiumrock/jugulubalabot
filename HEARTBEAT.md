@@ -1,7 +1,48 @@
-# HEARTBEAT.md Template
+# Heartbeat — stable checklist for the OpenClaw scheduler
 
-```markdown
-# Keep this file empty (or with only comments) to skip heartbeat API calls.
+Runs on agent heartbeat cadence (default `30m`, `1h` with Anthropic OAuth).
+If no task below finds anything actionable, reply exactly `HEARTBEAT_OK`
+and stop — the token is stripped and the message dropped if the remainder
+is ≤ `ackMaxChars` (default 300).
 
-# Add tasks below when you want the agent to check something periodically.
-```
+Layer: these tasks live in the **OpenClaw** layer. They are triggered by
+OpenClaw's scheduler, not by Claude Code's hooks.
+
+Kill switch: set `agents.defaults.heartbeat.every: "0m"` or delete these
+tasks and leave the file header-only.
+
+---
+
+tasks:
+- name: primitive-usage-drift
+  interval: 24h
+  prompt: |
+    Read workspace `traces/<today-UTC>.jsonl`. Count invocations where
+    `tool` starts with `mcp__openclaw__` OR tool is `Skill` and the class
+    references `openclaw-skills:`. If total invocations for the day are
+    >= 10 AND OpenClaw-native count is 0, alert with one concrete
+    suggestion (which primitive for which observed pattern). Otherwise
+    reply HEARTBEAT_OK.
+
+- name: mistake-loop-close
+  interval: 24h
+  prompt: |
+    Read `reports/mistakes.md`. If the newest entry is dated today or
+    yesterday AND lacks a `Fix:` line or durable-fix pointer, alert with
+    a one-line nudge naming the entry. Otherwise reply HEARTBEAT_OK.
+
+- name: reflect-signoff
+  interval: 24h
+  prompt: |
+    Read `reports/reflect-<yesterday-UTC>.md` if it exists. If the
+    "Hypotheses" section still contains the literal template phrase
+    "fill in manually", alert that yesterday's reflect has not been
+    reviewed. Otherwise reply HEARTBEAT_OK.
+
+- name: stale-scratch
+  interval: 48h
+  prompt: |
+    Read `state/scratch.md`. If the `_Last updated:_` timestamp is older
+    than 48h AND the file contains non-template content beyond the header,
+    alert that the scratch notepad may be stale. Otherwise reply
+    HEARTBEAT_OK.

@@ -25,6 +25,24 @@ from traces. The Track 3 first-pass Reflect consumes both.
 
 ## 2026-04-20
 
+- **09:25** — Confidently told God "no heartbeat mechanism exists"; he
+  pointed me at `docs.openclaw.ai/gateway/heartbeat` — OpenClaw has a
+  first-class one (scheduled agent turns, `HEARTBEAT.md` checklist,
+  `tasks:` blocks, isolated-session cost optimization). Root cause =
+  reasoning from CC's mental model instead of OpenClaw's — the exact
+  layer-confusion God flagged *one turn earlier*. Fix: mistakes.md entry,
+  real `HEARTBEAT.md` with 4 audit tasks (primitive-usage-drift,
+  mistake-loop-close, reflect-signoff, stale-scratch), and
+  `reflect.sh` extended with an **OpenClaw primitive usage** section so
+  underuse becomes measurable daily drift (mirror of behavioral habits).
+  First reflect run shows 5 MCP calls / 0 skills — baseline for tomorrow.
+  → `reports/mistakes.md`, `HEARTBEAT.md`, `scripts/reflect.sh`
+- **09:10** — `mcp__openclaw__memory_search` kick-tires: works, returns
+  semantic + text-score citations with path/line/snippet + 460ms latency.
+  Search for "heartbeat" surfaced only session-boundary metadata — zero
+  content, which *is* the finding (I'd never stored anything about it).
+  Grep over `memory/` matches literal strings only; MCP matches semantics
+  + scores text overlap. Keep reaching for it instead of Grep.
 - **08:45** — Round-two capabilities (wave II of wishlist): pre-Bash
   guard hook (prevents cd/cat/grep/find/echo Bash anti-patterns with
   teaching messages + kill switches), budget-peek `--risk` for
