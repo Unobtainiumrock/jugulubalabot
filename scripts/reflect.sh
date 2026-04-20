@@ -120,6 +120,62 @@ if [ -z "$FAIL_ROWS" ]; then
   FAIL_ROWS="_no failures today — either Tai got lucky or graders are too lax_"
 fi
 
+# Session attribution (top 10 sessions by invocation count)
+SESSION_ATTR=$(jq -r '.session_id' "$TRACE" | sort | uniq -c | sort -rn | head -10 \
+  | awk '{sid=$2; short=substr(sid,1,8); printf "| %-10s | %5d |\n", short, $1}')
+# Cross-reference with turn cost if available
+if [ -f "$TURNS_FILE" ] && [ -s "$TURNS_FILE" ]; then
+  SESSION_COST=$(jq -s 'group_by(.session_id) | map({sid: .[0].session_id, turns: length, cost: ((map(.cost_cents) | add) / 100)}) | sort_by(-.cost) | .[0:5] | .[]
+    | "| \(.sid[0:8]) | \(.turns) | $\(.cost | . * 100 | round / 100) |"' "$TURNS_FILE" -r 2>/dev/null)
+fi
+if [ -z "${SESSION_COST:-}" ]; then
+  SESSION_COST="| _no turn-level cost data_ |  |  |"
+fi
+
+# Tool sequence pairs (adjacent same-session, count ≥3)
+SEQ_PAIRS=$(jq -s 'sort_by(.session_id, .ts) | .[] | [.session_id, .tool, .class // "—"] | @tsv' "$TRACE" -r \
+  | awk -F'\t' '
+      BEGIN { prev_sid=""; prev_sig=""; }
+      {
+        sid=$1; sig=$2":"$3;
+        if (sid == prev_sid && prev_sig != "") {
+          pair = prev_sig " → " sig;
+          count[pair]++;
+        }
+        prev_sid=sid; prev_sig=sig;
+      }
+      END { for (p in count) if (count[p] >= 3) printf "%d\t%s\n", count[p], p; }' \
+  | sort -rn | head -10 \
+  | awk -F'\t' '{printf "| %5d | %s |\n", $1, $2}')
+if [ -z "$SEQ_PAIRS" ]; then
+  SEQ_PAIRS="| _no pair repeated ≥3× today_ |  |"
+fi
+
+# Cross-day delta (today vs yesterday)
+YESTERDAY=$(date -u -d "$DATE -1 day" +%F 2>/dev/null || echo "")
+PRIOR_TRACE="$WORKSPACE/traces/$YESTERDAY.jsonl"
+if [ -n "$YESTERDAY" ] && [ -f "$PRIOR_TRACE" ]; then
+  PRIOR_TOTAL=$(wc -l < "$PRIOR_TRACE" | tr -d ' ')
+  PRIOR_FAIL=$(jq -r 'select(.success == false) | .tool' "$PRIOR_TRACE" | wc -l | tr -d ' ')
+  PRIOR_TOP_TOOL=$(jq -r '.tool' "$PRIOR_TRACE" | sort | uniq -c | sort -rn | head -1 | awk '{print $2" ("$1")"}')
+  TODAY_TOP_TOOL=$(jq -r '.tool' "$TRACE" | sort | uniq -c | sort -rn | head -1 | awk '{print $2" ("$1")"}')
+  VOL_DELTA=$((TOTAL - PRIOR_TOTAL))
+  FAIL_DELTA=$((FAILURES - PRIOR_FAIL))
+  DELTA_SECTION=$(printf '| Metric | %s | %s | Δ |\n|--------|------------|------------|---|\n| Invocations | %d | %d | %+d |\n| Failures | %d | %d | %+d |\n| Top tool | %s | %s | — |\n' \
+    "$YESTERDAY" "$DATE" "$PRIOR_TOTAL" "$TOTAL" "$VOL_DELTA" "$PRIOR_FAIL" "$FAILURES" "$FAIL_DELTA" "$PRIOR_TOP_TOOL" "$TODAY_TOP_TOOL")
+else
+  DELTA_SECTION="_no prior-day trace available at $PRIOR_TRACE — skipping delta_"
+fi
+
+# Behavioral habits — explicit count of system-prompt violations
+CD_COUNT=$(jq -r 'select(.tool == "Bash" and .class == "cd") | 1' "$TRACE" | wc -l | tr -d ' ')
+ECHO_COUNT=$(jq -r 'select(.tool == "Bash" and .class == "echo") | 1' "$TRACE" | wc -l | tr -d ' ')
+CAT_COUNT=$(jq -r 'select(.tool == "Bash" and .class == "cat") | 1' "$TRACE" | wc -l | tr -d ' ')
+GREP_COUNT=$(jq -r 'select(.tool == "Bash" and (.class == "grep" or .class == "rg")) | 1' "$TRACE" | wc -l | tr -d ' ')
+FIND_COUNT=$(jq -r 'select(.tool == "Bash" and .class == "find") | 1' "$TRACE" | wc -l | tr -d ' ')
+HABITS_SECTION=$(printf '| Pattern | Count | Guidance |\n|---------|-------|----------|\n| `cd` prefix | %d | Bash cwd persists — use absolute paths / `git -C` |\n| `echo` | %d | Prefer direct text output over echo |\n| `cat` | %d | Prefer Read tool over cat |\n| `grep`/`rg` via Bash | %d | Use Grep tool, not Bash |\n| `find` via Bash | %d | Use Glob tool, not Bash find |\n' \
+  "$CD_COUNT" "$ECHO_COUNT" "$CAT_COUNT" "$GREP_COUNT" "$FIND_COUNT")
+
 cat > "$OUT" <<EOF
 # Reflect — $DATE
 
@@ -175,6 +231,32 @@ $REPEATS
 ## Failures
 
 $FAIL_ROWS
+
+## Session attribution (top 10 by invocations)
+
+| Session    | Invocations |
+|------------|-------------|
+$SESSION_ATTR
+
+**Top 5 sessions by turn cost:**
+
+| Session    | Turns | Cost |
+|------------|-------|------|
+$SESSION_COST
+
+## Tool sequence pairs (adjacent same-session, ≥3×)
+
+| Count | Pair (tool:class → tool:class) |
+|-------|--------------------------------|
+$SEQ_PAIRS
+
+## Cross-day delta
+
+$DELTA_SECTION
+
+## Behavioral habits (system-prompt violation counts)
+
+$HABITS_SECTION
 
 ## Active backlog
 

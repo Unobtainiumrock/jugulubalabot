@@ -25,6 +25,18 @@ from traces. The Track 3 first-pass Reflect consumes both.
 
 ## 2026-04-20
 
+- **08:19** — Reflect dry-run surfaced `Bash+cd` as the 2nd-most-common
+  (tool, class) pair (9×), in direct violation of the system-prompt rule.
+  Fix: feedback memory + new "Behavioral habits" section in reflect.sh
+  that counts `cd`/`echo`/`cat`/`grep`/`find`-via-Bash each day. Makes
+  drift measurable before it compounds.
+  → `memory/feedback_no_cd_prefix.md`, `scripts/reflect.sh`
+- **08:19** — Four reflect.sh extensions shipped: session attribution
+  (w/ cost bridge), tool-sequence pairs (adjacent same-session ≥3×),
+  cross-day delta (graceful skip if no prior trace), behavioral-habits
+  counts. Top finding: `Write:sh → Bash:chmod` 5× — candidate for a
+  `script-new` skill once Track 4 ships.
+  → `scripts/reflect.sh`
 - **07:43** — `.gitignore` negation (`!path`) only works when the parent
   directory is matched via a glob (`reports/*`), not a bare-dir pattern
   (`reports/`). Git won't descend into a fully-ignored dir to evaluate
