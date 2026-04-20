@@ -25,6 +25,11 @@ from traces. The Track 3 first-pass Reflect consumes both.
 
 ## 2026-04-20
 
+- **07:43** — `.gitignore` negation (`!path`) only works when the parent
+  directory is matched via a glob (`reports/*`), not a bare-dir pattern
+  (`reports/`). Git won't descend into a fully-ignored dir to evaluate
+  negations. Surfaced when first learnings-index commit silently skipped
+  the file. → `.gitignore` (959396c)
 - **07:26** — Auto-generated branches need retention GC from day 1, not
   deferred. Branch-count drift is a real risk for any commit cron.
   → `scripts/snapshot-gc.sh` (c96925a)
