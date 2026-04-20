@@ -31,6 +31,12 @@ fi
 YESTERDAY=$(date -u -d "yesterday" +%F)
 bash "$WORKSPACE/scripts/token-accounting.sh" "$YESTERDAY" >/dev/null 2>&1 || true
 
+# --- 2b. Pruning signal Layer 1: file-heat decay + touch aggregation -------
+bash "$WORKSPACE/scripts/heat-counter.sh" "$YESTERDAY" >/dev/null 2>&1 || true
+
+# --- 2c. Data-conditioned V2-readiness check (one-shot Telegram on trip) ---
+bash "$WORKSPACE/scripts/v2-readiness-check.sh" >/dev/null 2>&1 || true
+
 # --- 3. Bin classifier health on yesterday's traces -----------------------
 BIN_OUTPUT=$(bash "$WORKSPACE/scripts/bin-sanity.sh" "$YESTERDAY" 2>&1)
 BIN_EXIT=$?

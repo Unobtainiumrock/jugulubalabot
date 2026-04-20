@@ -86,6 +86,24 @@ BIN=$(printf '%s' "$PAYLOAD" | jq -r '
   else "other"
   end' 2>/dev/null || echo "other")
 
+# Touched paths — JSON array of workspace-relative file paths the call acted on.
+# Consumed by heat-counter.sh to build state/file-heat.jsonl. Kept cheap: only
+# direct fields + a coarse regex over Bash commands. Unknown = empty array.
+PATHS=$(printf '%s' "$PAYLOAD" | jq -c '
+  def norm: sub("^/root/\\.openclaw/workspace/"; "") | sub("^\\./"; "");
+  def nonempty: select(. != null and . != "");
+  .tool_name as $t |
+  .tool_input as $i |
+  if   $t == "Read" or $t == "Write" or $t == "Edit" or $t == "NotebookEdit"
+       then [($i.file_path // "" | nonempty | norm)]
+  elif $t == "Grep" then [($i.path // "" | nonempty | norm)]
+  elif $t == "Bash" then
+       [ ($i.command // "")
+         | scan("[A-Za-z0-9_./-]+\\.(?:sh|py|ts|tsx|js|jsx|json|jsonl|md|yml|yaml|toml)\\b")
+         | norm ]
+       | unique
+  else [] end' 2>/dev/null || echo "[]")
+
 TS=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 DATE=$(date -u +%Y-%m-%d)
 OUT="$TRACE_DIR/$DATE.jsonl"
@@ -99,5 +117,6 @@ jq -cn \
   --arg bin "$BIN" \
   --argjson success "$SUCCESS" \
   --argjson duration_ms "$DURATION_MS" \
-  '{ts: $ts, session_id: $session, tool: $tool, class: $class, input_hash: $hash, success: $success, duration_ms: $duration_ms, bin: $bin}' \
+  --argjson paths "$PATHS" \
+  '{ts: $ts, session_id: $session, tool: $tool, class: $class, input_hash: $hash, success: $success, duration_ms: $duration_ms, bin: $bin, paths: $paths}' \
   >> "$OUT"
