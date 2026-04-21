@@ -16,16 +16,26 @@ OPENCLAW="/usr/bin/openclaw"
 CHAT_TARGET="${NIGHTLY_NOTIFY_TARGET:-8692339838}"
 CHANNEL="${NIGHTLY_NOTIFY_CHANNEL:-telegram}"
 
+# OVERALL = max of every gated step's exit code. A gated step is one whose
+# failure should block the cron's lastRunStatus (evals, bin-sanity). Silent
+# refresh steps (token-accounting, heat-counter, v2-readiness) stay ||true.
 OVERALL=0
+
+bump_overall() {
+  # $1 = step exit code. Keeps OVERALL = max across all gated steps so the
+  # cron's lastRunStatus reflects the worst failure, not just "something broke".
+  local rc="$1"
+  if [ "$rc" -gt "$OVERALL" ]; then
+    OVERALL="$rc"
+  fi
+}
 
 # --- 1. Eval regression check ---------------------------------------------
 # eval-notify.sh exits 0 only if every fixture passes; it sends its own
-# Telegram alert on any fail. We don't double-push here.
+# Telegram alert on any fail. We don't double-push here — just gate OVERALL.
 bash "$WORKSPACE/scripts/eval-notify.sh"
 EVAL_EXIT=$?
-if [ "$EVAL_EXIT" -ne 0 ]; then
-  OVERALL=1
-fi
+bump_overall "$EVAL_EXIT"
 
 # --- 2. Token accounting for yesterday (runs silent; just refreshes data) --
 YESTERDAY=$(date -u -d "yesterday" +%F)
@@ -50,7 +60,7 @@ Decide: add rule / new bin / escalate to LLM classifier.
 Review: workspace/traces/$YESTERDAY.jsonl"
   "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
     --message "$MSG" < /dev/null || true
-  OVERALL=1
 fi
+bump_overall "$BIN_EXIT"
 
 exit "$OVERALL"
