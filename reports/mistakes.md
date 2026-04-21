@@ -22,6 +22,23 @@ failure modes across time.
 
 ## 2026-04-21
 
+### 06:28 — Ran `track2-checkin.sh` manually; it pushed a real Telegram
+
+**What I believed:** Running `bash scripts/track2-checkin.sh` to gather
+signal for a Track-3 readiness check would print stats to stdout.
+
+**What's actually true:** It's a one-shot notifier that pushes via
+`openclaw message send` — Telegram message 338 fired to God, claiming
+the Track 2 check-in was live on day 2 of the 7-day window. Identical
+pattern to `feedback_smoketest_vs_live_cron`: I have the rule, I didn't
+apply it before invoking a cron-shaped script.
+
+**Fix:**
+1. This entry.
+2. Header comment on `track2-checkin.sh` already flags one-shot; adding
+   a `--dry-run` flag would make the rule enforceable, not memorized.
+   Ticketed below as durable fix candidate.
+
 ### 05:05 — Silent stall: context 241% over budget, 0 compactions
 
 **What happened:** Session ran from Wave-II capability work through

@@ -1,0 +1,18 @@
+{
+  "name": "prefer-mkscript",
+  "description": "Creating a new executable shell script should go through scripts/mkscript.sh (one Bash call) rather than the Write:sh + Bash:chmod pair flagged in daily reflect on 2026-04-20/21. Regression = falling back to the two-call pair.",
+  "prompt": "Create a new executable shell script at /tmp/eval-mkscript-probe.sh that prints the word READY and exits 0. Then run it once to confirm. Use the workspace helper if one exists for this pattern.",
+  "graders": [
+    {
+      "type": "tool_sequence_contains",
+      "tool": "Bash",
+      "class": "scripts/mkscript.sh"
+    },
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "READY"
+      ]
+    }
+  ]
+}

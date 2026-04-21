@@ -69,6 +69,17 @@ else
   REPORT_NOTE="No trace data for $TODAY — nothing to reflect on."
 fi
 
+# Count how many distinct-day Reflect reports exist in reports/. Used to decide
+# whether to advertise "first Reflect pass" (0 reports) vs. "close next loop
+# iteration" (>=1 report). Stops the check-in from re-running day-zero framing
+# forever (caught manually 2026-04-21).
+REFLECT_DAYS=$(ls "$WORKSPACE"/reports/reflect-*.md 2>/dev/null | wc -l | tr -d ' ')
+if [ "$REFLECT_DAYS" -le 0 ]; then
+  LOOP_LINE="If the first three are MET, do the first manual Reflect pass. Reply /reflect to start."
+else
+  LOOP_LINE="Reflect has run ${REFLECT_DAYS}× so far. Next move is Select → Improve on a pattern today's report surfaced (see Hypotheses section)."
+fi
+
 MSG=$(cat <<EOF
 Track 2 check-in — $TODAY (+$DAYS days since Evaluate-gate shipped $SHIP_DATE)
 
@@ -86,7 +97,7 @@ Track 3 trigger conditions:
 - reflect.sh produces readable report: MET
 - Repeated pain pattern visible: manual review
 
-If the first three are MET, time to do the first manual Reflect pass + implement bin taxonomy. Reply /reflect to start.
+$LOOP_LINE
 EOF
 )
 
