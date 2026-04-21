@@ -69,6 +69,7 @@ BIN=$(printf '%s' "$PAYLOAD" | jq -r '
   elif $t == "Write" or $t == "Edit" or $t == "NotebookEdit" then
     (if ($path | test("/memory/")) then "memory_update" else "self_modify" end)
   elif $t == "Agent" or $t == "Task" then "agent_spawn"
+  elif $t == "TodoWrite" then "exec"
   elif $t == "Skill" then
     (if ($i.skill // "") == "schedule" or ($i.skill // "") == "loop" then "scheduling" else "exec" end)
   elif $t == "WebFetch" or $t == "WebSearch" then "external_fetch"
