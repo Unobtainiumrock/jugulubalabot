@@ -192,11 +192,105 @@ if [ -z "$SKILL_OPENCLAW_BREAKDOWN" ]; then
   SKILL_OPENCLAW_BREAKDOWN="| _no openclaw-skills invoked_ | 0 |"
 fi
 
+# --- New signals threading in outside-the-trace context ---
+
+# Pruning candidates (top 10 coldest)
+PRUNING_FILE="$WORKSPACE/state/pruning-candidates.jsonl"
+PRUNING_ROWS_COUNT=0
+if [ -f "$PRUNING_FILE" ] && [ -s "$PRUNING_FILE" ]; then
+  PRUNING_ROWS_COUNT=$(wc -l < "$PRUNING_FILE" | tr -d ' ')
+  PRUNING_SECTION=$(jq -r 'select(.path != null)
+    | [(.heat // 0), .path, (.centrality_fan_in // 0), (.centrality_fan_out // 0), (.git_age_days // 0), ((.reasons // []) | join(","))] | @tsv' "$PRUNING_FILE" \
+    | sort -k1,1n | head -10 \
+    | awk -F'\t' '{printf "| %s | %s | %s | %s | %s |\n", $2, $1, $3, $5, $6}')
+  if [ -z "$PRUNING_SECTION" ]; then
+    PRUNING_SECTION="| _no pruning-candidates.jsonl yet — weekly cron has not run or no candidates flagged_ |  |  |  |  |"
+  fi
+else
+  PRUNING_SECTION="| _no pruning-candidates.jsonl yet — weekly cron has not run or no candidates flagged_ |  |  |  |  |"
+fi
+
+# Mistakes tail (last 30 lines)
+MISTAKES_FILE="$WORKSPACE/reports/mistakes.md"
+if [ -f "$MISTAKES_FILE" ] && [ -s "$MISTAKES_FILE" ]; then
+  MISTAKES_SECTION=$(tail -n 30 "$MISTAKES_FILE")
+  MISTAKES_LOADED=1
+else
+  MISTAKES_SECTION="_no mistakes.md_"
+  MISTAKES_LOADED=0
+fi
+
+# Learnings tail (last 30 lines)
+LEARNINGS_FILE="$WORKSPACE/reports/learnings.md"
+if [ -f "$LEARNINGS_FILE" ] && [ -s "$LEARNINGS_FILE" ]; then
+  LEARNINGS_SECTION=$(tail -n 30 "$LEARNINGS_FILE")
+  LEARNINGS_LOADED=1
+else
+  LEARNINGS_SECTION="_no learnings.md_"
+  LEARNINGS_LOADED=0
+fi
+
+# Trace summary (optional helper script)
+TRACE_SUMMARY_SCRIPT="$WORKSPACE/scripts/trace-summary.sh"
+TRACE_SUMMARY_INVOKED=0
+if [ -x "$TRACE_SUMMARY_SCRIPT" ]; then
+  TRACE_SUMMARY_INVOKED=1
+  TRACE_SUMMARY_STDERR=$(mktemp)
+  TRACE_SUMMARY_OUT=$("$TRACE_SUMMARY_SCRIPT" "$DATE" 2>"$TRACE_SUMMARY_STDERR")
+  TRACE_SUMMARY_RC=$?
+  if [ "$TRACE_SUMMARY_RC" -ne 0 ]; then
+    TRACE_SUMMARY_SECTION="_warning: trace-summary.sh exited non-zero_"$'\n'"$(cat "$TRACE_SUMMARY_STDERR")"
+  else
+    TRACE_SUMMARY_SECTION="$TRACE_SUMMARY_OUT"
+  fi
+  rm -f "$TRACE_SUMMARY_STDERR"
+else
+  TRACE_SUMMARY_SECTION="_trace-summary.sh not available_"
+fi
+
+# Signals read — compute from actual file state at runtime
+SIGNAL_TRACE="\`traces/$DATE.jsonl\` — loaded ($TOTAL rows)"
+if [ -f "$TURNS_FILE" ] && [ -s "$TURNS_FILE" ]; then
+  TURN_ROWS=$(wc -l < "$TURNS_FILE" | tr -d ' ')
+  SIGNAL_TURNS="\`turns/$DATE.jsonl\` — loaded ($TURN_ROWS rows)"
+else
+  SIGNAL_TURNS="\`turns/$DATE.jsonl\` — _missing_"
+fi
+if [ -f "$PRUNING_FILE" ] && [ -s "$PRUNING_FILE" ]; then
+  SIGNAL_PRUNING="\`state/pruning-candidates.jsonl\` — loaded ($PRUNING_ROWS_COUNT rows)"
+else
+  SIGNAL_PRUNING="\`state/pruning-candidates.jsonl\` — _missing_"
+fi
+if [ "$MISTAKES_LOADED" -eq 1 ]; then
+  SIGNAL_MISTAKES="\`reports/mistakes.md\` — loaded"
+else
+  SIGNAL_MISTAKES="\`reports/mistakes.md\` — _missing_"
+fi
+if [ "$LEARNINGS_LOADED" -eq 1 ]; then
+  SIGNAL_LEARNINGS="\`reports/learnings.md\` — loaded"
+else
+  SIGNAL_LEARNINGS="\`reports/learnings.md\` — _missing_"
+fi
+if [ "$TRACE_SUMMARY_INVOKED" -eq 1 ]; then
+  SIGNAL_TRACE_SUMMARY="\`scripts/trace-summary.sh\` — invoked"
+else
+  SIGNAL_TRACE_SUMMARY="\`scripts/trace-summary.sh\` — _not available_"
+fi
+
 cat > "$OUT" <<EOF
 # Reflect — $DATE
 
 _Generated: $(date -u +"%Y-%m-%d %H:%M:%SZ") by \`scripts/reflect.sh\`._
 _SEPL step 1/5. Deterministic signal only; hypotheses are human-filled for now._
+
+## Signals read
+
+- $SIGNAL_TRACE
+- $SIGNAL_TURNS
+- $SIGNAL_PRUNING
+- $SIGNAL_MISTAKES
+- $SIGNAL_LEARNINGS
+- $SIGNAL_TRACE_SUMMARY
 
 ## Volume
 - **Total tool invocations:** $TOTAL
@@ -289,6 +383,26 @@ $MCP_OPENCLAW_BREAKDOWN
 | Skill                                    | Count |
 |------------------------------------------|-------|
 $SKILL_OPENCLAW_BREAKDOWN
+
+## Pruning candidates (top 10 coldest, via state/pruning-candidates.jsonl)
+
+| Path | Heat | Fan-in | Stale (days) | Reasons |
+|------|------|--------|--------------|---------|
+$PRUNING_SECTION
+
+## Mistakes (tail 30 from reports/mistakes.md)
+
+$MISTAKES_SECTION
+
+## Learnings (tail 30 from reports/learnings.md)
+
+$LEARNINGS_SECTION
+
+## Trace summary (scripts/trace-summary.sh $DATE)
+
+\`\`\`
+$TRACE_SUMMARY_SECTION
+\`\`\`
 
 ## Active backlog
 
