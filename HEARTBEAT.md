@@ -46,3 +46,13 @@ tasks:
     than 48h AND the file contains non-template content beyond the header,
     alert that the scratch notepad may be stale. Otherwise reply
     HEARTBEAT_OK.
+
+- name: budget-peek-watch
+  interval: 1h
+  prompt: |
+    Run `bash scripts/budget-peek.sh --risk`. If the first line starts
+    with `Context-risk [ORANGE]` or `Context-risk [RED]`, alert with the
+    full line so the active session knows to compact or back off.
+    Otherwise reply HEARTBEAT_OK. Codifies 2026-04-21 05:05 mistake
+    (silent stall at 241% context). The capability existed; the reflex
+    didn't — this heartbeat is the reflex.

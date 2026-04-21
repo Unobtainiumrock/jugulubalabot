@@ -38,6 +38,9 @@ apply it before invoking a cron-shaped script.
 2. Header comment on `track2-checkin.sh` already flags one-shot; adding
    a `--dry-run` flag would make the rule enforceable, not memorized.
    Ticketed below as durable fix candidate.
+3. **Resolved 2026-04-21 H1 overnight pass:** shipped `--dry-run` flag
+   on `track2-checkin.sh`. Manual runs now default to live, but the
+   escape hatch exists and the help text documents it.
 
 ### 05:05 — Silent stall: context 241% over budget, 0 compactions
 
@@ -69,6 +72,10 @@ it was needed (see 08:35 entry 2026-04-20 on token-accounting latency).
    God, tracked in the current conversation.
 3. Consider a heartbeat task that calls `budget-peek.sh` and pushes
    when it crosses ORANGE, instead of relying on me to remember.
+4. **Resolved 2026-04-21 H1 overnight pass:** item 2 shipped earlier
+   (session-clean.sh SessionStart hook, commit 26466ed). Item 3 shipped
+   now as `budget-peek-watch` task in `HEARTBEAT.md` — hourly peek, alerts
+   on ORANGE/RED. Capability is now scheduled, not reflex-dependent.
 
 ### 05:10 — Claimed "no heartbeat means /new kills the old session"
 
@@ -90,6 +97,10 @@ Layer confusion again: CC layer vs OpenClaw gateway layer.
 
 **Fix:** The "robust /new" design must treat session lifecycle as
 state-file hygiene, not process management.
+
+**Resolved 2026-04-21 H1 overnight pass:** same durable fix as 05:05
+entry — `session-clean.sh` SessionStart hook (26466ed) manages the
+state-file side of session lifecycle. Not process-killing; file-hygienic.
 
 ---
 

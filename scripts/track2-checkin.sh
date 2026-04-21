@@ -2,8 +2,21 @@
 # Track 2 check-in — fires 7 days after Evaluate-gate shipped (2026-04-19).
 # Runs reflect.sh on today's traces, computes aggregate state since 2026-04-19,
 # and pushes a state-aware Telegram message to God. One-shot by design.
+#
+# Flags:
+#   --dry-run   Print the composed message to stdout; do NOT push to Telegram.
+#               Added after 2026-04-21 06:28 mistake: I ran the script manually
+#               for "stats" and it fired a real Telegram to God.
 
 set -uo pipefail
+
+DRY_RUN=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    *) ;;
+  esac
+done
 
 WORKSPACE="/root/.openclaw/workspace"
 OPENCLAW="/usr/bin/openclaw"
@@ -100,5 +113,11 @@ Track 3 trigger conditions:
 $LOOP_LINE
 EOF
 )
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf -- '--- DRY RUN: message that WOULD be pushed to %s:%s ---\n%s\n--- END DRY RUN ---\n' \
+    "$CHANNEL" "$CHAT_TARGET" "$MSG"
+  exit 0
+fi
 
 "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" --message "$MSG" < /dev/null
