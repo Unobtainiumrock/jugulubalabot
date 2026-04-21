@@ -62,8 +62,15 @@ fi
 CLASS=$(printf '%s' "$PAYLOAD" | jq -r '
   def head: split(" ")[0] // "";
   def ext: capture("\\.(?<e>[A-Za-z0-9]+)$").e // "";
+  # Strip leading `NAME=VAL` env-var assignments (incl. `NAME=$(cmd)`) so the
+  # class lands on the real command, not the assignment token.
+  def strip_env:
+    until(
+      test("^[A-Za-z_][A-Za-z0-9_]*=(?:\\$\\([^)]*\\)|\\S+)\\s+") | not;
+      sub("^[A-Za-z_][A-Za-z0-9_]*=(?:\\$\\([^)]*\\)|\\S+)\\s+"; "")
+    );
   .tool_input as $i |
-  if   .tool_name == "Bash"                      then ($i.command // "" | head)
+  if   .tool_name == "Bash"                      then ($i.command // "" | strip_env | head)
   elif .tool_name == "Skill"                     then ($i.skill // "")
   elif .tool_name == "Agent" or .tool_name == "Task" then ($i.subagent_type // "general-purpose")
   elif .tool_name == "Read" or .tool_name == "Write" or .tool_name == "Edit"
