@@ -21,3 +21,13 @@ evals/runs/
 # Eval fixture drafts from mistake-to-fixture.sh — needs manual review
 # before promotion to evals/fixtures/
 evals/fixtures-draft/
+
+# Peer-agent runtime state — queues, logs, transcripts. Source (README,
+# config.json, learnings.md, bin/) stays tracked.
+peer-agent/inbox/
+peer-agent/outbox/
+peer-agent/inbox-processed/
+peer-agent/transcript.jsonl
+peer-agent/checkins.jsonl
+peer-agent/redaction-log.jsonl
+peer-agent/poll.log

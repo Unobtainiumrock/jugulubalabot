@@ -1,0 +1,25 @@
+{
+  "peer_agent": {
+    "name": "jobhunt-autoresponder",
+    "runtime": "claude-cli-local",
+    "host": "nick-laptop",
+    "current_stage": "multi-threaded-report-surfacing",
+    "known_next_stage": "click-to-book-interview (may need separate agent)"
+  },
+  "bridge": {
+    "mode": "file-relay",
+    "transport": "user-copy-paste",
+    "upgrade_path": "laptop-side relay script piping Claude CLI stdio to an HTTP endpoint we poll"
+  },
+  "identity": {
+    "mode": "impersonate-nick",
+    "voice_notes": "casual, punctuation-loose, concepts-first, Telegram-style; direct"
+  },
+  "checkin": {
+    "cadence_turns": 10,
+    "also_trigger_on": ["decision_point_unsure", "same_topic_cycle_3plus"],
+    "digest_channel": "telegram",
+    "digest_target": "8692339838"
+  },
+  "redaction_rules_version": 1
+}
