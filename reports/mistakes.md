@@ -20,6 +20,62 @@ failure modes across time.
 
 ---
 
+## 2026-04-21
+
+### 05:05 — Silent stall: context 241% over budget, 0 compactions
+
+**What happened:** Session ran from Wave-II capability work through
+`/new` at 05:11. Final completed turn was a heartbeat alert about the
+unfilled Hypotheses section in `reports/reflect-2026-04-20.md` at
+05:18:29 UTC the prior cycle. After that: silence. Not a crash — a
+stall. God had to poke with a diagnosis prompt to get a response.
+
+**Root cause:** Context = 481k against a 200k budget (241% over), zero
+compactions in the entire session. 94% cache hit rate kept cost flat
+but doesn't help latency or hard limits. Each turn re-streamed ~453k
+cached + 28k new — eventually something upstream (harness timeout,
+gateway backpressure, or the model refusing to extend) gave up silently.
+
+**Why wrong:** I had `scripts/budget-peek.sh` and explicit ORANGE-zone
+monitoring guidance built *specifically* to catch this — and never ran
+it during the session. The capability existed; the reflex didn't.
+
+**Pattern:** Tools only pay off with *use*. Ownership of a capability
+doesn't substitute for invoking it in the moment. This is the second
+time a budget/cost capability has been present and unused at the moment
+it was needed (see 08:35 entry 2026-04-20 on token-accounting latency).
+
+**Fix:**
+1. This entry.
+2. Design robust `/new` process (session-clean.sh + SessionStart hook)
+   so zombie transcripts can't accumulate silently — separate ask from
+   God, tracked in the current conversation.
+3. Consider a heartbeat task that calls `budget-peek.sh` and pushes
+   when it crosses ORANGE, instead of relying on me to remember.
+
+### 05:10 — Claimed "no heartbeat means /new kills the old session"
+
+**What I believed:** That `/new` cleanly terminates the prior session
+and that checking `ps` is sufficient to confirm no zombies exist.
+
+**What's actually true:** The `claude` CLI is re-spawned per turn with
+`--resume <session_id>`, so there is never a long-lived CLI process to
+"kill." Zombie state lives elsewhere:
+- On-disk transcripts in `~/.claude/projects/**` accumulate forever.
+- Gateway `sessions.json` grows (450KB observed) as it tracks per-channel
+  state across many historical session IDs.
+- Reset-archival (`*.jsonl.reset.<timestamp>`) is newer than most prior
+  `/new` calls — so there's no way to count how many /news have happened.
+
+**Why wrong:** I reasoned from OS process model (PIDs, kill signals)
+when the actual state lives in gateway registry + on-disk transcripts.
+Layer confusion again: CC layer vs OpenClaw gateway layer.
+
+**Fix:** The "robust /new" design must treat session lifecycle as
+state-file hygiene, not process management.
+
+---
+
 ## 2026-04-20
 
 ### 09:20 — Confident claim: "no heartbeat mechanism exists"
