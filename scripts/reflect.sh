@@ -46,6 +46,10 @@ BIN_NULL_COUNT=$(jq -r 'select(.bin == null) | 1' "$TRACE" | wc -l | tr -d ' ')
 BIN_BREAKDOWN=$(jq -r '.bin // "null"' "$TRACE" | sort | uniq -c | sort -rn \
   | awk -v t="$TOTAL" '{printf "| %-16s | %5d | %5.1f%% |\n", $2, $1, 100.0*$1/t}')
 
+# Source breakdown (session-context origin)
+SOURCE_BREAKDOWN=$(jq -r '.source // "unknown"' "$TRACE" | sort | uniq -c | sort -rn \
+  | awk -v t="$TOTAL" '{printf "| %-14s | %5d | %5.1f%% |\n", $2, $1, 100.0*$1/t}')
+
 # Class breakdown per tool — top 15 (tool, class, count)
 CLASS_BREAKDOWN=$(jq -r '[.tool, (.class // "—")] | @tsv' "$TRACE" \
   | sort | uniq -c | sort -rn | head -15 \
@@ -309,6 +313,14 @@ $TOOL_BREAKDOWN
 | Bin              | Count |    %   |
 |------------------|-------|--------|
 $BIN_BREAKDOWN
+
+## Trace source breakdown (session context origin)
+
+_Heartbeats fire into the main session and read as \`conversation\` — narrower detection is deferred. Missing \`source\` field → \`unknown\`._
+
+| Source         | Count |    %   |
+|----------------|-------|--------|
+$SOURCE_BREAKDOWN
 
 ## Cost ($DATE)
 

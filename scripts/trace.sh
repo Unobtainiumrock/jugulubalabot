@@ -18,6 +18,22 @@ INPUT_HASH=$(printf '%s' "$PAYLOAD" | jq -cS '.tool_input // {}' | sha256sum | c
 KEY="${SESSION}__${TOOL}__${INPUT_HASH}"
 SIDECAR="$SIDECAR_DIR/$KEY"
 
+# Source detection. OPENCLAW_MCP_SESSION_KEY has shape `agent:<id>:<ctx>[:...]`
+# where <ctx> is the canonical session context (cron, subagent, main, telegram,
+# etc.). Heartbeats fire into the main session and are not distinguishable here
+# — they fold into "conversation" for now; narrower detection can iterate.
+SOURCE="unknown"
+if [ -n "${OPENCLAW_MCP_SESSION_KEY:-}" ]; then
+  CTX=$(printf '%s' "$OPENCLAW_MCP_SESSION_KEY" | awk -F: '{print $3}')
+  case "$CTX" in
+    cron)                                            SOURCE="cron" ;;
+    subagent|acp)                                    SOURCE="subagent" ;;
+    main|direct|explicit|telegram|whatsapp|dashboard) SOURCE="conversation" ;;
+    "")                                              SOURCE="unknown" ;;
+    *)                                               SOURCE="$CTX" ;;
+  esac
+fi
+
 # Nanosecond epoch for duration math
 NOW_NS=$(date -u +%s%N)
 
@@ -116,8 +132,9 @@ jq -cn \
   --arg hash "$INPUT_HASH" \
   --arg class "$CLASS" \
   --arg bin "$BIN" \
+  --arg source "$SOURCE" \
   --argjson success "$SUCCESS" \
   --argjson duration_ms "$DURATION_MS" \
   --argjson paths "$PATHS" \
-  '{ts: $ts, session_id: $session, tool: $tool, class: $class, input_hash: $hash, success: $success, duration_ms: $duration_ms, bin: $bin, paths: $paths}' \
+  '{ts: $ts, session_id: $session, tool: $tool, class: $class, input_hash: $hash, success: $success, duration_ms: $duration_ms, bin: $bin, source: $source, paths: $paths}' \
   >> "$OUT"
