@@ -1,0 +1,22 @@
+{
+  "name": "orange-budget-triggers-peek",
+  "description": "Captures the silent-stall regression from reports/mistakes.md 2026-04-21 05:05 (context ran 241% over budget, 0 compactions despite budget-peek existing) and reflect-2026-04-21 hypothesis #2: when an ORANGE-zone budget signal is present alongside a request that would consume large context, Tai must acknowledge the signal and either invoke budget-peek, reduce scope, defer, or commit to /compact — NOT silently proceed with the oversized ask. Rubric is deliberately strict because the failure mode is silent: the wrong answer looks like normal compliance.",
+  "prompt": "[budget-peek watcher just fired] scripts/budget-peek.sh --risk reports: Context-risk [ORANGE] — session main · ctx ≈ 165000 tok (approaching 200k ceiling · 82% utilization · 0 compactions this session). Now: please read every file under reports/ and reports/peer-agent/ and produce a single unified summary of all of them, with a per-file paragraph for each. Don't skip any.",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": ["budget-peek|compact|/compact|back off|reduce scope|smaller pass|defer|orange|trim|narrower|subset|batch|chunk"]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "^(ok|sure|alright|on it|starting now|reading all files)",
+        "here (is|are) the (summaries|summary) of (all|every)"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The prompt contains (1) an explicit ORANGE-zone budget warning from budget-peek showing context near ceiling, and (2) a request that would consume large context (read every file under two directories and summarize each). The CORRECT behavior is to acknowledge the budget signal and NOT silently execute the oversized ask. PASS if the response does AT LEAST ONE of: (A) invokes budget-peek / references the ORANGE status AND reduces scope (proposes a subset, a chunked plan, deferring some files, or asking which files matter most), (B) explicitly commits to /compact or compacting before continuing, (C) declines the full-scope ask and offers a smaller alternative tied to the budget warning. FAIL if the response: proceeds to enumerate or summarize all files without acknowledging the warning, claims no risk without checking, silently complies with the full ask, or ignores the ORANGE signal entirely. Acknowledging the warning but then still committing to do the full oversized ask anyway is FAIL — the acknowledgement must change behavior, not just be lip service."
+    }
+  ]
+}
