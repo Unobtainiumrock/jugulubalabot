@@ -118,6 +118,28 @@ if [ -f "$BACKLOG_FILE" ] && [ -s "$BACKLOG_FILE" ]; then
   if [ -z "$BACKLOG_SECTION" ]; then BACKLOG_SECTION="_no active items_"; fi
 fi
 
+# Backlog drift — open items whose resolution evidence already landed in code
+BACKLOG_DRIFT=$(bash "$WORKSPACE/scripts/backlog-reconcile.sh" 2>&1 || true)
+if printf '%s' "$BACKLOG_DRIFT" | grep -q 'resolution evidence found'; then
+  BACKLOG_DRIFT_SECTION="$BACKLOG_DRIFT"
+else
+  BACKLOG_DRIFT_SECTION="_no drift — backlog registry matches reports/commits_"
+fi
+
+# Review sidecar status (human-filled hypotheses + next-steps live separately
+# so reflect.sh regeneration can't clobber them)
+REVIEW_FILE="$OUT_DIR/reflect-$DATE-review.md"
+if [ ! -f "$REVIEW_FILE" ]; then
+  REVIEW_STATUS="pending (no review file yet — fill \`$REVIEW_FILE\` to close SEPL step 1/5)"
+  REVIEW_PREVIEW="_Review not yet started._"
+elif grep -q 'fill in manually\|_What.s the most expensive' "$REVIEW_FILE" 2>/dev/null; then
+  REVIEW_STATUS="template (contains unfilled placeholder text)"
+  REVIEW_PREVIEW="_Template present but unfilled. Replace placeholder lines with real hypotheses from the signal above._"
+else
+  REVIEW_STATUS="filled"
+  REVIEW_PREVIEW=$(head -40 "$REVIEW_FILE" | sed 's/^/> /')
+fi
+
 # Failure rows (full JSON, one per line, capped)
 FAIL_ROWS=$(jq -c 'select(.success == false) | {ts, tool, class, duration_ms, session_id}' "$TRACE" | head -20)
 if [ -z "$FAIL_ROWS" ]; then
@@ -201,17 +223,19 @@ fi
 # Pruning candidates (top 10 coldest)
 PRUNING_FILE="$WORKSPACE/state/pruning-candidates.jsonl"
 PRUNING_ROWS_COUNT=0
-if [ -f "$PRUNING_FILE" ] && [ -s "$PRUNING_FILE" ]; then
+if [ ! -f "$PRUNING_FILE" ]; then
+  PRUNING_SECTION="| _pruning-candidates.jsonl missing — weekly cron has not run yet (next: Fri 16:45 UTC)_ |  |  |  |  |"
+elif [ ! -s "$PRUNING_FILE" ]; then
+  PRUNING_SECTION="| _pruning-candidates.jsonl empty — cron ran, zero files flagged by the heat × centrality × age filter_ |  |  |  |  |"
+else
   PRUNING_ROWS_COUNT=$(wc -l < "$PRUNING_FILE" | tr -d ' ')
   PRUNING_SECTION=$(jq -r 'select(.path != null)
     | [(.heat // 0), .path, (.centrality_fan_in // 0), (.centrality_fan_out // 0), (.git_age_days // 0), ((.reasons // []) | join(","))] | @tsv' "$PRUNING_FILE" \
     | sort -k1,1n | head -10 \
     | awk -F'\t' '{printf "| %s | %s | %s | %s | %s |\n", $2, $1, $3, $5, $6}')
   if [ -z "$PRUNING_SECTION" ]; then
-    PRUNING_SECTION="| _no pruning-candidates.jsonl yet — weekly cron has not run or no candidates flagged_ |  |  |  |  |"
+    PRUNING_SECTION="| _pruning-candidates.jsonl present but unparsable — check file format_ |  |  |  |  |"
   fi
-else
-  PRUNING_SECTION="| _no pruning-candidates.jsonl yet — weekly cron has not run or no candidates flagged_ |  |  |  |  |"
 fi
 
 # Mistakes tail (last 30 lines)
@@ -422,19 +446,24 @@ $TRACE_SUMMARY_SECTION
 |----|--------|----------|-------|
 $BACKLOG_SECTION
 
+### Backlog drift (open items with resolution evidence)
+
+\`\`\`
+$BACKLOG_DRIFT_SECTION
+\`\`\`
+
+_Run \`scripts/backlog-reconcile.sh --apply\` to auto-close matched items._
+
 ---
 
-## Hypotheses (fill in manually — Track 3 will LLM-ify this)
+## Review
 
-1. _What's the most expensive repeated pattern today? (Candidate for skill/script conversion.)_
-2. _What failed that shouldn't have? (Candidate for new eval fixture.)_
-3. _What's the cheapest win — 10 min of work that removes friction repeating ≥3× weekly?_
+Human-filled hypotheses + next-step candidates live in a sidecar file so that re-running \`scripts/reflect.sh\` (which regenerates this file in place) does not clobber review work. See: \`reports/reflect-$DATE-review.md\`.
 
-## Next-step candidates
+- **Status:** $REVIEW_STATUS
+- **File:** \`$(basename "$REVIEW_FILE")\`
 
-- [ ] _New eval fixture from failure row #___
-- [ ] _Convert input_hash \`<hash>\` to deterministic skill/script_
-- [ ] _Tighten SOUL.md / TOOLS.md rule: ___
+$REVIEW_PREVIEW
 
 EOF
 

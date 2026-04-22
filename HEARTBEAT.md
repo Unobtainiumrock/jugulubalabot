@@ -34,10 +34,14 @@ tasks:
 - name: reflect-signoff
   interval: 24h
   prompt: |
-    Read `reports/reflect-<yesterday-UTC>.md` if it exists. If the
-    "Hypotheses" section still contains the literal template phrase
-    "fill in manually", alert that yesterday's reflect has not been
-    reviewed. Otherwise reply HEARTBEAT_OK.
+    Check whether `reports/reflect-<yesterday-UTC>-review.md` exists.
+    If not, alert that the human review sidecar for yesterday's reflect
+    is missing. If it exists but contains the literal template phrase
+    "fill in manually" or `_What's the most expensive`, alert that the
+    review file is still a template. Otherwise reply HEARTBEAT_OK.
+    Rationale: reflect.sh regenerates the main reflect file in place,
+    so human hypotheses must live in the `-review.md` sidecar or they
+    get clobbered on re-run.
 
 - name: stale-scratch
   interval: 48h
