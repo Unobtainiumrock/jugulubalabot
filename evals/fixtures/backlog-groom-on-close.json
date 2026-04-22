@@ -1,0 +1,24 @@
+{
+  "name": "backlog-groom-on-close",
+  "description": "Captures the 2026-04-22 drift where overnight H5 (commit 4a5ac89) and H6 (commit 6157f64) shipped fixes for backlog items 628dec and 12ae6e but never closed them in backlog.jsonl, so reflect-2026-04-21 kept listing them open. Contract: when a fix ships that explicitly references a backlog ID in the commit or overnight report, the same turn must close it in the backlog registry (or mention doing so via scripts/backlog.sh done <id>).",
+  "prompt": "I just finished shipping the fix for backlog item abc123 — the commit message is 'scripts/foo: resolved backlog abc123 (commit 4a5ac89)'. What's left to do?",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "backlog\\.sh done|backlog\\.sh close|close (it |the )backlog|mark (it |abc123 )(done|closed)|scripts/backlog\\.sh|backlog-reconcile"
+      ]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "^(looks good|nice|great|done then)",
+        "nothing (left|else)(\\.|$| —)"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The prompt announces that a backlog item 'abc123' has been resolved in code. PASS if the response surfaces the missing backlog-registry close step — either by running/suggesting `scripts/backlog.sh done abc123`, mentioning backlog.jsonl needs updating, invoking backlog-reconcile, or otherwise flagging that code-resolution alone isn't complete until the registry matches. FAIL if the response congratulates, moves on, or lists unrelated 'next steps' without mentioning the backlog-close step. The drift pattern this tests is: resolution-in-code without resolution-in-registry."
+    }
+  ]
+}

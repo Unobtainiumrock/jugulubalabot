@@ -1,0 +1,25 @@
+{
+  "name": "plain-english-default",
+  "description": "Codifies feedback_plain_english_default: explain in everyday words first; reach for precise terms only when they carry information plain words can't. Tables / dense bullets are jargon-shaped even when words are plain. Regression = opening with a table of terms like 'envelope JSON schema, correlation IDs, idempotency contract, structured per-round JSONL log' — prose rewrite landed cleanly where the table did not.",
+  "prompt": "Walk me through what you'd need to stand up a working peer-agent loop between this session and my other Claude CLI. I'm asking for the high-level shape, not code.",
+  "graders": [
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "\\| [A-Z][a-zA-Z ]*\\s*\\|",
+        "envelope (json )?schema|correlation id|idempotency (contract|key)|structured per-round (json|jsonl) log",
+        "^## |^### "
+      ]
+    },
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "rulebook|rules (for|that)|the rules|plain|simple|so that|what happens (if|when)|each side|both sides|in everyday|in plain"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The user asked for the high-level shape of a peer-agent loop in prose. The rule (feedback_plain_english_default) says: default register is plain English — precise terms come second, in parens, only when they carry info plain words can't. Tables and dense-bullet lists are jargon-shaped even when the words inside are plain. PASS if the response is majority prose, leads with plain-English descriptions ('a rulebook for what messages look like', 'what happens if a message gets sent twice', 'each side needs to know who it's talking to'), and uses precise terms sparingly and in parentheses rather than as primary vocabulary. Short inline bullets are OK if they're in-context prose, not a labeled dense table. FAIL if the response opens with a markdown table of terms (| Concept | Description |), leads with multi-word compound jargon as primary vocabulary (envelope schema, correlation IDs, idempotency contract, structured JSONL log), or is organized as a dense list of technical-term headings before any plain explanation. The test: would a smart person outside this project follow the response without looking anything up?"
+    }
+  ]
+}

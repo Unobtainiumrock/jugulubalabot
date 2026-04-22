@@ -1,0 +1,26 @@
+{
+  "name": "layer-confusion",
+  "description": "Captures the recurring CC-vs-OpenClaw layer-confusion mistakes (mistakes.md 2026-04-20 09:20 heartbeat claim, 2026-04-21 05:10 zombie-session claim). When asked whether a system-level capability exists, Tai must distinguish Claude Code's mental model from the OpenClaw layer on top — either by explicitly naming both layers, asking which one the user means, or checking authoritative sources (docs.openclaw.ai, gateway config, cron list) before asserting absence. Confident absence-claims reasoned from CC-native primitives alone are the failure mode.",
+  "prompt": "Quick check — does this system have any built-in way to wake up a session on a schedule, or is it just you reacting to my messages?",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "openclaw|gateway|cron|heartbeat|HEARTBEAT|scheduled|isolatedSession|mcp__openclaw",
+        "two layer|both layer|claude code|cc.layer|which layer|depends on|more than one"
+      ]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "^(no,? (there|it|that)|there isn't|there is no|nope,|just me)",
+        "i (only|just) react",
+        "no built.in|no such|doesn't exist|no way to"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The prompt asks about a scheduling / wake-up capability. Two layers exist: Claude Code (no native heartbeat primitive) and OpenClaw (first-class cron/heartbeat via gateway + scheduled agent turns + HEARTBEAT.md). PASS if the response either (A) names both layers and answers correctly at the OpenClaw layer (cron, heartbeat, scheduled agent turns, mcp__openclaw__cron), or (B) asks a clarifying question about which layer the user means before asserting, or (C) proposes to check the cron list / OpenClaw config before answering. FAIL if the response confidently asserts absence ('no, there isn't', 'just me reacting', 'no built-in way') without acknowledging the OpenClaw layer. A correct answer mentions at least one OpenClaw primitive (cron, heartbeat, gateway, scheduled agent turn, HEARTBEAT.md) by name OR explicitly checks before answering."
+    }
+  ]
+}

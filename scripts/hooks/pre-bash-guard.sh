@@ -70,6 +70,14 @@ elif [[ "$CMD" =~ ^[[:space:]]*echo[[:space:]]+[\"\'] ]] && [[ ! "$CMD" =~ [\|\<
 # --- Pattern 8: echo "..." > file (writing files via shell) ---
 elif [[ "$CMD" =~ ^[[:space:]]*echo[[:space:]]+.+[[:space:]]*\>[[:space:]] ]]; then
   REASON="Use the Write tool instead of 'echo ... > file'. Write preserves newlines and formats reliably. (Override: OPENCLAW_GUARD_OFF=1)"
+
+# --- Pattern 9: chmod +x / 0755 on a script path (Write:sh → chmod pair) ---
+# Reflect-2026-04-21 surfaced this pair firing 7×/day despite the `mkscript`
+# skill existing precisely to collapse it into one call. Nudge, don't block
+# unknown paths — only catch the script-suffix case to avoid false positives
+# on chmod of non-script files.
+elif [[ "$CMD" =~ ^[[:space:]]*chmod[[:space:]]+(\+x|[0-7]{3,4})[[:space:]]+[^\|\&\;]*\.(sh|py|bash|zsh|rb|pl)([[:space:]]|$) ]]; then
+  REASON="Use scripts/mkscript.sh to write-and-chmod in one call instead of Write followed by 'chmod +x'. Usage: bash scripts/mkscript.sh <path> <<'EOF' ... EOF. Surfaced in reflect-2026-04-21 as a 7×/day redundant pair. (Override: OPENCLAW_GUARD_OFF=1)"
 fi
 
 if [ -n "$REASON" ]; then
