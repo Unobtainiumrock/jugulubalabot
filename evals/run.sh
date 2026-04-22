@@ -49,7 +49,6 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
     > "$fx_dir/stdout.txt" 2> "$fx_dir/stderr.txt"
   exit_code=$?
   t_end=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
-  printf '{"start":"%s","end":"%s","exit":%d}\n' "$t_start" "$t_end" "$exit_code" > "$fx_dir/meta.json"
 
   # Snapshot trace rows inside this run's window.
   today_trace="$TRACES_DIR/$(date -u +%Y-%m-%d).jsonl"
@@ -69,20 +68,24 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
     notes="claude_exit=$exit_code"
   fi
 
+  g_results=()
+
   while IFS= read -r grader; do
     gtype=$(printf '%s' "$grader" | jq -r '.type')
+    g_result="PASS"
+    g_notes=""
     case "$gtype" in
       regex_negative)
         while IFS= read -r pat; do
           if grep -qiE "$pat" "$fx_dir/stdout.txt"; then
-            result="FAIL"; notes="$notes;found:$pat"
+            g_result="FAIL"; g_notes="$g_notes;found:$pat"
           fi
         done < <(printf '%s' "$grader" | jq -r '.patterns[]')
         ;;
       regex_positive)
         while IFS= read -r pat; do
           if ! grep -qiE "$pat" "$fx_dir/stdout.txt"; then
-            result="FAIL"; notes="$notes;missing:$pat"
+            g_result="FAIL"; g_notes="$g_notes;missing:$pat"
           fi
         done < <(printf '%s' "$grader" | jq -r '.patterns[]')
         ;;
@@ -90,7 +93,7 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
         max=$(printf '%s' "$grader" | jq -r '.max')
         n=$(wc -c < "$fx_dir/stdout.txt")
         if [ "$n" -gt "$max" ]; then
-          result="FAIL"; notes="$notes;too_long:$n>$max"
+          g_result="FAIL"; g_notes="$g_notes;too_long:$n>$max"
         fi
         ;;
       tool_sequence_contains)
@@ -118,7 +121,7 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
         if [ -z "$hit" ]; then
           tool_label=$(printf '%s' "$tools_json" | jq -r 'join("|")')
           label_suffix="${class:+/$class}${class_regex:+/~${class_regex}}"
-          result="FAIL"; notes="$notes;missing_tool:$tool_label$label_suffix"
+          g_result="FAIL"; g_notes="$g_notes;missing_tool:$tool_label$label_suffix"
         fi
         ;;
       llm_judge)
@@ -138,14 +141,32 @@ Your verdict (PASS or FAIL, single word):"
         printf '%s\n' "$judge_out" > "$fx_dir/llm_judge.txt"
         if ! grep -qiE '^\s*PASS' <<< "$judge_out"; then
           truncated=$(printf '%s' "$judge_out" | tr '\n' ' ' | cut -c1-80)
-          result="FAIL"; notes="$notes;llm_judge:${truncated}"
+          g_result="FAIL"; g_notes="$g_notes;llm_judge:${truncated}"
         fi
         ;;
       *)
-        result="FAIL"; notes="$notes;unknown_grader:$gtype"
+        g_result="FAIL"; g_notes="$g_notes;unknown_grader:$gtype"
         ;;
     esac
+    if [ "$g_result" = "FAIL" ]; then
+      result="FAIL"
+      notes="$notes$g_notes"
+    fi
+    g_results+=("$(jq -nc --arg t "$gtype" --arg r "$g_result" --arg n "${g_notes#;}" \
+      '{type:$t, result:$r, notes:$n}')")
   done < <(jq -c '.graders[]' "$fx_file")
+
+  # Single-writer: meta.json written once here, after graders complete.
+  # Earlier write-at-exec was a latent bug — readers saw .graders=null.
+  if [ ${#g_results[@]} -gt 0 ]; then
+    graders_json=$(printf '%s\n' "${g_results[@]}" | jq -s '.')
+  else
+    graders_json='[]'
+  fi
+  jq -n --arg s "$t_start" --arg e "$t_end" --argjson x "$exit_code" \
+        --arg r "$result" --arg n "${notes#;}" --argjson g "$graders_json" \
+    '{start:$s, end:$e, exit:$x, result:$r, notes:$n, graders:$g}' \
+    > "$fx_dir/meta.json"
 
   printf "%s\t%s\t%s\n" "$fx_name" "$result" "${notes#;}" >> "$summary"
   if [ "$result" = "PASS" ]; then
