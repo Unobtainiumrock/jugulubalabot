@@ -183,6 +183,14 @@ echo
 echo "Pass: $pass   Fail: $fail"
 echo "Artifacts: $RUN_DIR"
 
+# Artifact-shape guard — verify every meta.json has required non-null
+# keys before marking the run complete. Generalizes past the .graders=null
+# regression (96284c, 2026-04-22) to any shape drift.
+if ! bash "$WORKSPACE/scripts/guards/meta-shape.sh" "$RUN_DIR" >&2; then
+  echo "eval: meta-shape guard failed — harness wrote malformed meta.json" >&2
+  exit 2
+fi
+
 # Completion marker — readers (track2-checkin, eval-notify) must only treat
 # runs with this file present as authoritative. Avoids reading partial
 # summary.tsv while the harness is mid-run.

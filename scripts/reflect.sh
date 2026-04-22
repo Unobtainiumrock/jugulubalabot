@@ -126,6 +126,27 @@ else
   BACKLOG_DRIFT_SECTION="_no drift — backlog registry matches reports/commits_"
 fi
 
+# Backlog decay — open items untouched for ≥3 days. The real fix for the
+# 96284c regression (3 days open, caught by a human) is surfacing stale
+# items in the daily signal instead of letting them rot silently.
+BACKLOG_DECAY_SECTION="_no decay — all open items updated within 3 days_"
+if [ -f "$BACKLOG_FILE" ] && [ -s "$BACKLOG_FILE" ]; then
+  REPORT_EPOCH=$(date -u -d "$DATE" +%s 2>/dev/null || date -u +%s)
+  DECAY_ROWS=$(jq -r --argjson now "$REPORT_EPOCH" '
+    select(.status == "open" or .status == "doing")
+    | . as $r
+    | (.ts_updated // .ts_created) as $t
+    | (($now - ($t | fromdateiso8601)) / 86400 | floor) as $d
+    | select($d >= 3)
+    | "| \($r.id) | \($r.priority) | \($d) | \($r.title) |"
+  ' "$BACKLOG_FILE" 2>/dev/null | sort -t'|' -k4 -rn)
+  if [ -n "$DECAY_ROWS" ]; then
+    BACKLOG_DECAY_SECTION="| ID | Priority | Days stale | Title |
+|----|----------|------------|-------|
+$DECAY_ROWS"
+  fi
+fi
+
 # Review sidecar status (human-filled hypotheses + next-steps live separately
 # so reflect.sh regeneration can't clobber them)
 REVIEW_FILE="$OUT_DIR/reflect-$DATE-review.md"
@@ -453,6 +474,10 @@ $BACKLOG_DRIFT_SECTION
 \`\`\`
 
 _Run \`scripts/backlog-reconcile.sh --apply\` to auto-close matched items._
+
+### Backlog decay (open ≥3 days since last update)
+
+$BACKLOG_DECAY_SECTION
 
 ---
 
