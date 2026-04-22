@@ -29,14 +29,28 @@ SUMMARY="$WORKSPACE/evals/runs/${LATEST:-}/summary.tsv"
 if [ -z "${LATEST:-}" ] || [ ! -f "$SUMMARY" ]; then
   MSG="Eval regression: harness exited $EXIT but no summary.tsv was found. Check $WORKSPACE/evals/runs/."
 else
-  FAILS=$(awk -F'\t' 'NR>1 && $2=="FAIL" {printf "- %s  (%s)\n", $1, $3}' "$SUMMARY")
-  if [ -z "$FAILS" ]; then
-    FAILS="(no FAIL rows parsed from summary.tsv; exit=$EXIT)"
+  # Per-fail block: fixture name, grader notes, first ~200ch of agent stdout.
+  # Added 2026-04-22 for alert-triage-from-message (task #12).
+  FAIL_BLOCKS=""
+  while IFS=$'\t' read -r fx result notes; do
+    [ "$result" = "FAIL" ] || continue
+    sout=""
+    if [ -f "$WORKSPACE/evals/runs/$LATEST/$fx/stdout.txt" ]; then
+      sout=$(head -c 200 "$WORKSPACE/evals/runs/$LATEST/$fx/stdout.txt" | tr '\n' ' ')
+      [ -n "$sout" ] || sout="(empty stdout)"
+    fi
+    FAIL_BLOCKS+="- $fx
+  notes: $notes
+  stdout: $sout
+"
+  done < <(awk -F'\t' 'NR>1' "$SUMMARY")
+  if [ -z "$FAIL_BLOCKS" ]; then
+    FAIL_BLOCKS="(no FAIL rows parsed from summary.tsv; exit=$EXIT)"
   fi
   MSG="Eval regression — run $LATEST:
 
-$FAILS
-
+$FAIL_BLOCKS
+Triage: bash $WORKSPACE/scripts/eval-triage.sh $LATEST
 Artifacts: $WORKSPACE/evals/runs/$LATEST/"
 fi
 
@@ -47,17 +61,25 @@ if [ "${#MSG}" -gt "$MAX_MSG_CHARS" ]; then
 [truncated; full artifacts on disk]"
 fi
 
-DRY_FLAG=()
+# EVAL_NOTIFY_DRY_RUN bypasses everything (local smoke test).
 if [ "${EVAL_NOTIFY_DRY_RUN:-0}" = "1" ]; then
-  DRY_FLAG=(--dry-run)
+  "$OPENCLAW" message send \
+    --channel "$CHANNEL" \
+    --target "$CHAT_TARGET" \
+    --message "$MSG" \
+    --dry-run \
+    < /dev/null \
+    || echo "[eval-notify] dry-run push failed" >&2
+  exit "$EXIT"
 fi
 
-"$OPENCLAW" message send \
-  --channel "$CHANNEL" \
-  --target "$CHAT_TARGET" \
-  --message "$MSG" \
-  "${DRY_FLAG[@]}" \
-  < /dev/null \
-  || echo "[eval-notify] push failed; check openclaw gateway / pairing state" >&2
+# Real alert: route through send-alert for severity + quiet-hours buffering.
+# Eval regressions are "action" — actionable but not wake-the-user urgent.
+ALERT_TARGET="$CHAT_TARGET" ALERT_CHANNEL="$CHANNEL" \
+  bash "$WORKSPACE/scripts/send-alert.sh" \
+    --severity action \
+    --source "eval" \
+    --message "$MSG" \
+  || echo "[eval-notify] send-alert failed; check openclaw gateway / pairing state" >&2
 
 exit "$EXIT"

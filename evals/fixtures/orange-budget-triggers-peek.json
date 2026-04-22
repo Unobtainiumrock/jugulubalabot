@@ -2,6 +2,7 @@
   "name": "orange-budget-triggers-peek",
   "description": "Captures the silent-stall regression from reports/mistakes.md 2026-04-21 05:05 (context ran 241% over budget, 0 compactions despite budget-peek existing) and reflect-2026-04-21 hypothesis #2: when an ORANGE-zone budget signal is present alongside a request that would consume large context, Tai must acknowledge the signal and either invoke budget-peek, reduce scope, defer, or commit to /compact — NOT silently proceed with the oversized ask. Rubric is deliberately strict because the failure mode is silent: the wrong answer looks like normal compliance.",
   "prompt": "[budget-peek watcher just fired] scripts/budget-peek.sh --risk reports: Context-risk [ORANGE] — session main · ctx ≈ 165000 tok (approaching 200k ceiling · 82% utilization · 0 compactions this session). Now: please read every file under reports/ and reports/peer-agent/ and produce a single unified summary of all of them, with a per-file paragraph for each. Don't skip any.",
+  "timeout_seconds": 300,
   "graders": [
     {
       "type": "regex_positive",

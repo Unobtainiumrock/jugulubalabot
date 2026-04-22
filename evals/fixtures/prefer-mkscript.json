@@ -6,7 +6,7 @@
     {
       "type": "tool_sequence_contains",
       "tool": "Bash",
-      "class": "scripts/mkscript.sh"
+      "class_regex": "(^|/)scripts/mkscript\\.sh$"
     },
     {
       "type": "regex_positive",

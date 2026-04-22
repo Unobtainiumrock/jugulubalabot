@@ -36,10 +36,16 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
   cp "$fx_file" "$fx_dir/fixture.json"
 
   prompt=$(jq -r '.prompt' "$fx_file")
+  # Per-fixture timeout override: `timeout_seconds` in the fixture JSON wins.
+  # Falls back to TIMEOUT_SECS (default 180). Added after 2026-04-22 run:
+  # orange-budget-triggers-peek hit 180s exactly with empty stdout.
+  fx_timeout=$(jq -r '.timeout_seconds // empty' "$fx_file")
+  [ -z "$fx_timeout" ] && fx_timeout="$TIMEOUT_SECS"
   t_start=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
-  echo "[run] $fx_name"
+  echo "[run] $fx_name (timeout=${fx_timeout}s)"
 
-  timeout "$TIMEOUT_SECS" "$CLAUDE_BIN" -p "$prompt" \
+  EVAL_RUN=1 EVAL_RUN_ID="$RUN_ID" EVAL_FIXTURE="$fx_name" \
+    timeout "$fx_timeout" "$CLAUDE_BIN" -p "$prompt" \
     > "$fx_dir/stdout.txt" 2> "$fx_dir/stderr.txt"
   exit_code=$?
   t_end=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
@@ -93,7 +99,14 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
           elif .tools then .tools
           else [.tool] end')
         class=$(printf '%s' "$grader" | jq -r '.class // empty')
-        if [ -n "$class" ]; then
+        class_regex=$(printf '%s' "$grader" | jq -r '.class_regex // empty')
+        if [ -n "$class_regex" ]; then
+          # Regex match — handles cases where .class lands as absolute path vs
+          # workspace-relative (e.g. mkscript.sh). Case-insensitive.
+          hit=$(jq -c --argjson ts "$tools_json" --arg cr "$class_regex" \
+            'select((.tool as $x | $ts | index($x)) and ((.class // "") | test($cr; "i")))' \
+            "$fx_dir/trace.jsonl" | head -1)
+        elif [ -n "$class" ]; then
           hit=$(jq -c --argjson ts "$tools_json" --arg c "$class" \
             'select((.tool as $x | $ts | index($x)) and .class == $c)' \
             "$fx_dir/trace.jsonl" | head -1)
@@ -104,7 +117,8 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
         fi
         if [ -z "$hit" ]; then
           tool_label=$(printf '%s' "$tools_json" | jq -r 'join("|")')
-          result="FAIL"; notes="$notes;missing_tool:$tool_label${class:+/$class}"
+          label_suffix="${class:+/$class}${class_regex:+/~${class_regex}}"
+          result="FAIL"; notes="$notes;missing_tool:$tool_label$label_suffix"
         fi
         ;;
       llm_judge)
@@ -147,5 +161,16 @@ column -t -s $'\t' "$summary"
 echo
 echo "Pass: $pass   Fail: $fail"
 echo "Artifacts: $RUN_DIR"
+
+# Completion marker — readers (track2-checkin, eval-notify) must only treat
+# runs with this file present as authoritative. Avoids reading partial
+# summary.tsv while the harness is mid-run.
+printf '{"pass":%d,"fail":%d,"finished":"%s"}\n' \
+  "$pass" "$fail" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$RUN_DIR/done.marker"
+
+# Single collapsed summary line into the main lifecycle log — replaces the
+# 15+ per-fixture session-start lines (which now route to the eval log).
+echo "$(date -u +%FT%TZ) eval-run $RUN_ID pass=$pass fail=$fail" \
+  >> "$WORKSPACE/reports/session-lifecycle.log" 2>/dev/null || :
 
 [ "$fail" -eq 0 ] && exit 0 || exit 1

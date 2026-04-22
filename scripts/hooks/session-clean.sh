@@ -23,7 +23,15 @@ set -uo pipefail
 WORKSPACE="/root/.openclaw/workspace"
 CC_PROJECT_DIR="/root/.claude/projects/-root--openclaw-workspace"
 GW_SESSIONS="/root/.openclaw/agents/main/sessions/sessions.json"
-LIFECYCLE_LOG="$WORKSPACE/reports/session-lifecycle.log"
+# Eval-harness sub-sessions (claude -p per fixture, 15×/run) spammed the main
+# lifecycle log with ~25+ lines in 7 minutes, drowning real session events.
+# Route eval sessions to a separate file so a full run = many lines in the
+# eval log, not the main one. run.sh exports EVAL_RUN=1 per fixture.
+if [ "${EVAL_RUN:-0}" = "1" ]; then
+  LIFECYCLE_LOG="$WORKSPACE/reports/session-lifecycle-eval.log"
+else
+  LIFECYCLE_LOG="$WORKSPACE/reports/session-lifecycle.log"
+fi
 STATE_DIR="$WORKSPACE/state"
 BUDGET_STATE="$STATE_DIR/budget-alert.state"
 RETENTION_DAYS="${SESSION_CLEAN_RETENTION_DAYS:-7}"
