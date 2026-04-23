@@ -34,14 +34,13 @@ tasks:
 - name: reflect-signoff
   interval: 24h
   prompt: |
-    Check whether `reports/reflect-<yesterday-UTC>-review.md` exists.
-    If not, alert that the human review sidecar for yesterday's reflect
-    is missing. If it exists but contains the literal template phrase
-    "fill in manually" or `_What's the most expensive`, alert that the
-    review file is still a template. Otherwise reply HEARTBEAT_OK.
-    Rationale: reflect.sh regenerates the main reflect file in place,
-    so human hypotheses must live in the `-review.md` sidecar or they
-    get clobbered on re-run.
+    Run `bash scripts/reflect-signoff-alert.sh`. The script checks
+    yesterday's review sidecar (`reports/reflect-<date>-review.md`)
+    and, if missing, emits a Telegram message with inline buttons
+    (👀 View hypotheses / ✅ Approve as-is / ⏭️ Skip) that route to
+    the `reflect-signoff` plugin at `.openclaw/extensions/reflect-signoff/`.
+    Cooldown + breadcrumb logic lives inside the script. Reply
+    HEARTBEAT_OK — the script handles user-facing delivery itself.
 
 - name: stale-scratch
   interval: 48h
