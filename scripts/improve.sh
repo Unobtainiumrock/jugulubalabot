@@ -83,6 +83,7 @@ if [ "${IMPROVE_DRY_RUN:-0}" = "1" ]; then
   echo "improve: DRY_RUN — brief above, not spawning subagent"
   log_attempt "dry_run" "brief printed only"
   git checkout -q master
+  git branch -q -D "$branch" 2>/dev/null || true
   exit 0
 fi
 
