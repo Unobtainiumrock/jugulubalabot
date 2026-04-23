@@ -12,6 +12,29 @@ Each run creates `runs/<UTC-timestamp>/` with per-fixture `stdout.txt`, `stderr.
 
 Exit 0 = all fixtures passed. Exit 1 = at least one failed.
 
+## Benchmarks
+
+`bench.sh` is the capability-drift lane. Unlike fixtures, benchmarks are task
+dirs under `benchmarks/` with `prompt.md` plus either `test.sh` or
+`expected.txt`.
+
+```bash
+bash /root/.openclaw/workspace/evals/bench.sh --list
+bash /root/.openclaw/workspace/evals/bench.sh bash-loop
+```
+
+Use benchmarks for raw capability checks that should stay separate from the
+policy / workflow regressions in `fixtures/`.
+
+Benchmarks run a preflight first via `scripts/claude-print-health.sh`.
+If Claude auth/network/runtime state is unhealthy, `bench.sh` fails fast with
+`__preflight__` instead of spending minutes timing out each task.
+
+When running as `root`, `bench.sh` auto-sets `IS_SANDBOX=1` if Claude's
+default permission mode is `bypassPermissions`. This matches the OpenClaw VPS
+runtime and avoids the root-only `--dangerously-skip-permissions` refusal seen
+from plain SSH shells.
+
 ## Environment knobs
 
 - `CLAUDE_BIN` — path to the claude CLI. Default: `claude` on PATH.

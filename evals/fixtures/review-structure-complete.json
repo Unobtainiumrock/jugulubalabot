@@ -1,0 +1,27 @@
+{
+  "name": "review-structure-complete",
+  "description": "A valid reflect review artifact needs both a hypotheses section and a next-step section with actual content. Regression = producing a structurally incomplete review or blessing placeholder text.",
+  "prompt": "Give me the smallest valid reflect review stub for a day where there was one actionable pattern to fix.",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "## Hypotheses",
+        "## Next-step candidates",
+        "\\- \\[[ x]\\] "
+      ]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "_Skipped",
+        "fill in manually",
+        "_What pattern or gap"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "A smallest valid reflect review stub still needs two real sections: `## Hypotheses` with at least one concrete item, and `## Next-step candidates` with at least one checkbox item. PASS only if both sections are present and the content is filled, not placeholder text."
+    }
+  ]
+}

@@ -59,3 +59,12 @@ tasks:
     Otherwise reply HEARTBEAT_OK. Codifies 2026-04-21 05:05 mistake
     (silent stall at 241% context). The capability existed; the reflex
     didn't — this heartbeat is the reflex.
+
+- name: claude-print-health
+  interval: 24h
+  prompt: |
+    Run `bash scripts/claude-print-health.sh`. If the first line starts
+    with `Claude-print-health [FAIL]`, alert with that first line only.
+    Otherwise reply HEARTBEAT_OK. This keeps the benchmark / print lane
+    observable so we notice auth, DNS, API reachability, or writable-state
+    regressions before a baseline run silently burns time on timeouts.

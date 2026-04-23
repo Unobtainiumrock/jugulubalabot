@@ -26,6 +26,7 @@ DATE="${DATE_OVERRIDE:-$(date -u -d 'yesterday' +%F)}"
 REVIEW="$REPORTS/reflect-${DATE}-review.md"
 REFLECT="$REPORTS/reflect-${DATE}.md"
 BREADCRUMB="$STATE_DIR/reflect-signoff-${DATE}.sent"
+REVIEW_GUARD="$WORKSPACE/scripts/guards/review-shape.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -34,11 +35,13 @@ if [ ! -f "$REFLECT" ]; then
   exit 0
 fi
 
-# Review sidecar exists → signoff done. Clean up any breadcrumb so a
-# regressing delete (sidecar removed) would re-alert on the next cycle.
+# Review sidecar exists and passes shape guard → signoff done. Clean up any
+# breadcrumb so a regressing delete (or malformed edit) would re-alert later.
 if [ -f "$REVIEW" ]; then
-  rm -f "$BREADCRUMB"
-  exit 0
+  if bash "$REVIEW_GUARD" "$REVIEW" >/dev/null 2>&1; then
+    rm -f "$BREADCRUMB"
+    exit 0
+  fi
 fi
 
 # Cooldown check.
@@ -54,7 +57,11 @@ fi
 TARGET="${ALERT_TARGET:-8692339838}"
 CHANNEL="${ALERT_CHANNEL:-telegram}"
 
-BODY=$(printf 'Reflect %s needs review — sidecar missing.\n\nTap to act:' "$DATE")
+if [ -f "$REVIEW" ]; then
+  BODY=$(printf 'Reflect %s review exists but is incomplete.\n\nTap to fix or close it:' "$DATE")
+else
+  BODY=$(printf 'Reflect %s needs review — sidecar missing.\n\nTap to act:' "$DATE")
+fi
 BUTTONS=$(printf '[[{"text":"👀 View hypotheses","callback_data":"reflect:view:%s"},{"text":"✅ Approve as-is","callback_data":"reflect:approve:%s"},{"text":"⏭️ Skip","callback_data":"reflect:skip:%s"}]]' "$DATE" "$DATE" "$DATE")
 
 if [ "${DRY_RUN:-0}" = "1" ]; then

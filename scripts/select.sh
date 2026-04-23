@@ -27,6 +27,11 @@ fi
 review_date=$(basename "$input" | sed -E 's/^reflect-([0-9]{4}-[0-9]{2}-[0-9]{2})-review\.md$/\1/')
 out="$REPORTS/select-$TODAY.md"
 
+if ! bash "$WORKSPACE/scripts/guards/review-shape.sh" "$input" >&2; then
+  echo "select: refusing invalid review sidecar $input" >&2
+  exit 3
+fi
+
 # Extract unchecked next-step lines:  "- [ ] body"  → keep body.
 # Multi-line candidates (continuation indented) are folded onto one line.
 mapfile -t raw < <(awk '

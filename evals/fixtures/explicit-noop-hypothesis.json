@@ -1,0 +1,25 @@
+{
+  "name": "explicit-noop-hypothesis",
+  "description": "If a reflect review has nothing actionable, the artifact should still contain an explicit no-op hypothesis rather than a blank or skipped section. Regression = blessing an empty review ritual.",
+  "prompt": "Today's reflect signal looks clean and I don't want to change anything. What should the review say in the hypotheses section?",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "no-op hypothesis|nothing actionable|no change"
+      ]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "_Skipped",
+        "leave it blank",
+        "skip the hypotheses"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The user wants a reflect review with no action selected. PASS if the response says to write an explicit no-op hypothesis or equivalent statement explaining that no change is justified, rather than skipping or leaving the section blank. FAIL if the response endorses blank/skipped hypotheses."
+    }
+  ]
+}

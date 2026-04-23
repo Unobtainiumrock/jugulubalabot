@@ -8,11 +8,13 @@
 #   bash scripts/budget-peek.sh <prefix>        # specific session by id prefix
 #   bash scripts/budget-peek.sh --all           # sum across all sessions today
 #   bash scripts/budget-peek.sh --risk          # compaction-risk estimate
+#   bash scripts/budget-peek.sh --live          # latest session + freshness/lag
 set -uo pipefail
 
 WORKSPACE="/root/.openclaw/workspace"
 DATE="$(date -u +%F)"
 TURNS="$WORKSPACE/turns/$DATE.jsonl"
+PROJECT_DIR="/root/.claude/projects/-root--openclaw-workspace"
 
 # Refresh from transcripts so the peek is fresh, not stuck at last nightly.
 if [ -d "/root/.claude/projects/-root--openclaw-workspace" ]; then
@@ -25,6 +27,50 @@ if [ ! -f "$TURNS" ] || [ ! -s "$TURNS" ]; then
 fi
 
 MODE="${1:-}"
+
+age_human() {
+  local seconds="$1"
+  if [ "$seconds" -lt 60 ]; then
+    printf '%ss' "$seconds"
+  elif [ "$seconds" -lt 3600 ]; then
+    printf '%sm%ss' $((seconds / 60)) $((seconds % 60))
+  else
+    printf '%sh%sm' $((seconds / 3600)) $(((seconds % 3600) / 60))
+  fi
+}
+
+freshness_line() {
+  local session="$1"
+  local latest_ts
+  latest_ts=$(jq -s -r --arg s "$session" 'map(select(.session_id == $s)) | sort_by(.ts) | last | .ts' "$TURNS")
+  local latest_epoch now lag_sec transcript age_sec state note
+  latest_epoch=$(date -u -d "$latest_ts" +%s 2>/dev/null || echo 0)
+  now=$(date -u +%s)
+  lag_sec=$((now - latest_epoch))
+  transcript="$PROJECT_DIR/$session.jsonl"
+  if [ -f "$transcript" ]; then
+    age_sec=$((now - $(stat -c %Y "$transcript" 2>/dev/null || echo "$now")))
+  else
+    age_sec=-1
+  fi
+  if [ "$lag_sec" -lt 120 ] && { [ "$age_sec" -lt 0 ] || [ "$age_sec" -lt 120 ]; }; then
+    state="LIVE"
+    note="transcript and turns look current"
+  elif [ "$lag_sec" -lt 900 ] && { [ "$age_sec" -lt 0 ] || [ "$age_sec" -lt 900 ]; }; then
+    state="WARM"
+    note="fresh enough for guidance, not enforcement"
+  else
+    state="STALE"
+    note="turn data may lag the active session"
+  fi
+  if [ "$age_sec" -ge 0 ]; then
+    printf 'Freshness [%s] — latest accounted turn %s ago · transcript touched %s ago · %s\n' \
+      "$state" "$(age_human "$lag_sec")" "$(age_human "$age_sec")" "$note"
+  else
+    printf 'Freshness [%s] — latest accounted turn %s ago · transcript file missing · %s\n' \
+      "$state" "$(age_human "$lag_sec")" "$note"
+  fi
+}
 
 if [ "$MODE" = "--risk" ]; then
   # Compaction-risk: context size ≈ cache_read + cache_write + input
@@ -47,6 +93,29 @@ if [ "$MODE" = "--risk" ]; then
     | "Context-risk [\($status)] — session \($s[0:8]) · ctx ≈ \($ctx) tok (cache_read \($latest.cache_read_tokens) + cache_write \($latest.cache_write_tokens) + input \($latest.input_tokens))
 \($advice)"
   ' "$TURNS"
+  exit 0
+fi
+
+if [ "$MODE" = "--live" ]; then
+  SESSION=$(jq -s -r 'sort_by(.ts) | last | .session_id' "$TURNS")
+  jq -s -r --arg s "$SESSION" '
+    map(select(.session_id == $s))
+    | sort_by(.ts) as $all
+    | ($all | length) as $n
+    | (($all | map(.cost_cents) | add) / 100) as $cost
+    | ($all | last) as $latest
+    | ($all | map(.input_tokens) | add) as $in
+    | ($all | map(.output_tokens) | add) as $out
+    | (($latest.cache_read_tokens // 0) + ($latest.cache_write_tokens // 0) + ($latest.input_tokens // 0)) as $ctx
+    | (if $ctx < 100000 then "GREEN"
+        elif $ctx < 150000 then "YELLOW"
+        elif $ctx < 180000 then "ORANGE"
+        else "RED" end) as $status
+    | "Live session \($s[0:8]) · \($n) turns · $\($cost | . * 100 | round / 100)
+\($in) in / \($out) out · latest turn \($latest.ts | split("T")[1] | split(".")[0])Z
+Context-risk [\($status)] · ctx ≈ \($ctx) tok (cache_read \($latest.cache_read_tokens) + cache_write \($latest.cache_write_tokens) + input \($latest.input_tokens))"
+  ' "$TURNS"
+  freshness_line "$SESSION"
   exit 0
 fi
 

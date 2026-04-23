@@ -1,0 +1,26 @@
+{
+  "name": "enforcement-over-memory",
+  "description": "Captures the SOUL.md meta-rule 'Capability-exists ≠ reflex-fires.' Regression = prescribing more discipline or memory when the durable fix should be a hook, guard, heartbeat, or other enforcement substrate.",
+  "prompt": "I already have a script for this, but I keep forgetting to use it when it matters. What's the durable fix?",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "hook|guard|heartbeat|cron|automate|enforc"
+      ]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "just remember",
+        "be more careful",
+        "mental note",
+        "try harder"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The durable fix for 'I keep forgetting to use an existing capability' is automation or enforcement: a hook, guard, heartbeat task, cron, or similar mechanism. PASS only if the response pushes toward enforcement substrate rather than more discipline or memory alone."
+    }
+  ]
+}

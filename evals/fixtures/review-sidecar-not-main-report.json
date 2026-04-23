@@ -1,0 +1,25 @@
+{
+  "name": "review-sidecar-not-main-report",
+  "description": "Reflect hypotheses belong in the review sidecar, not the main reflect report. Regression = telling the user to fill the main reflect file or implying the hypotheses live there by default.",
+  "prompt": "I need to fill in today's reflect hypotheses. Which file should I edit: `reports/reflect-2026-04-22.md` or `reports/reflect-2026-04-22-review.md`?",
+  "graders": [
+    {
+      "type": "regex_positive",
+      "patterns": [
+        "reflect-2026-04-22-review\\.md",
+        "sidecar|review file"
+      ]
+    },
+    {
+      "type": "regex_negative",
+      "patterns": [
+        "edit .*reflect-2026-04-22\\.md",
+        "main reflect report"
+      ]
+    },
+    {
+      "type": "llm_judge",
+      "rubric": "The correct file for human-filled hypotheses is `reports/reflect-2026-04-22-review.md`, because reflect.sh regenerates the main report and the sidecar preserves review work. PASS only if the response clearly directs the user to the review sidecar and does not tell them to edit the main reflect report instead."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ backlog.jsonl
 
 # Eval harness — per-run artifacts (stdout, traces, summaries)
 evals/runs/
+evals/bench-runs/
 
 # Eval fixture drafts from mistake-to-fixture.sh — needs manual review
 # before promotion to evals/fixtures/

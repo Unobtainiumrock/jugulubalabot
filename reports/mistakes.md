@@ -20,6 +20,64 @@ failure modes across time.
 
 ---
 
+## 2026-04-23
+
+### 19:20 — Asked for pasted artifacts before checking the artifact path
+
+**What I believed:** That the host benchmark artifacts might be outside
+the current runtime's visibility, so asking God to paste the failing
+`stdout.txt` / `test.log` files was the next reasonable step.
+
+**What's actually true:** The referenced artifact path
+`evals/bench-runs/20260423T190641Z/` was directly readable from this
+workspace. I could have opened the files immediately and checked the
+bench grader behavior myself. The lack of automatic Claude→Codex
+handoff was real, but it did not prevent a simple file read.
+
+**Why wrong:** I over-generalized from the earlier runtime split
+(sandbox `claude -p` failures vs. healthy Hostinger VPS runtime) and
+failed to test the concrete artifact path before asking for help. This
+was an inference error, not an access limitation.
+
+**Fix:**
+1. This entry.
+2. New rule: when God references a concrete file or artifact path,
+   check that path directly before inferring runtime separation or
+   asking for pasted contents.
+3. Bench grader follow-up was completed from the visible host artifact
+   tree; backlog `6d57fb` closed once the tuned graders passed against
+   the host outputs and the host verification run went 3/3 green.
+
+---
+
+### 09:53 — `reflect-signoff` "View hypotheses" looked in the wrong file
+
+**What I believed:** The Telegram `reflect-signoff` button path labeled
+"View hypotheses" would show the hypotheses relevant to the current
+reflect review.
+
+**What's actually true:** `scripts/reflect.sh` keeps hypotheses in the
+review sidecar (`reports/reflect-<date>-review.md`), not in the main
+reflect report. The plugin was reading `reflect-<date>.md` for a
+`## Hypotheses` section that generally does not exist there, then
+falling back to a "no hypotheses section found" message. Separate flaw:
+"approve as-is" could create a sign-off stub with a header but no actual
+hypothesis content.
+
+**Why wrong:** I matched the UX label to the wrong artifact. The
+generator/report split was already explicit in `scripts/reflect.sh`; I
+did not follow that contract through the plugin flow.
+
+**Fix:**
+1. This entry.
+2. `reflect-signoff` now reads or creates the review sidecar on "View
+   hypotheses" and shows the hypotheses from that file, not the main
+   reflect report.
+3. No-op approvals now write an explicit no-op hypothesis and a closed
+   next-step line instead of leaving the section blank.
+
+---
+
 ## 2026-04-21
 
 ### 06:28 — Ran `track2-checkin.sh` manually; it pushed a real Telegram
