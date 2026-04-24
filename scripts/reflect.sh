@@ -331,6 +331,7 @@ cat > "$OUT" <<EOF
 
 _Generated: $(date -u +"%Y-%m-%d %H:%M:%SZ") by \`scripts/reflect.sh\`._
 _SEPL step 1/5. Deterministic signal only; hypotheses are human-filled for now._
+_Historical snapshot: this report is not live state after generation. For current truth, prefer \`backlog.jsonl\`, the latest review sidecar, and current repo state._
 
 ## Signals read
 
@@ -425,7 +426,7 @@ $DELTA_SECTION
 
 $HABITS_SECTION
 
-## OpenClaw primitive usage
+## OpenClaw primitive usage snapshot
 
 _Are we leveraging OpenClaw as intended? Zero use ≠ fine — means CC-native habits are winning when an OpenClaw primitive was appropriate._
 
@@ -461,7 +462,7 @@ $LEARNINGS_SECTION
 $TRACE_SUMMARY_SECTION
 \`\`\`
 
-## Active backlog
+## Backlog snapshot at generation time
 
 | ID | Status | Priority | Title |
 |----|--------|----------|-------|
@@ -473,7 +474,7 @@ $BACKLOG_SECTION
 $BACKLOG_DRIFT_SECTION
 \`\`\`
 
-_Run \`scripts/backlog-reconcile.sh --apply\` to auto-close matched items._
+_Historical note: this backlog table is frozen at report generation time. Run \`scripts/backlog-reconcile.sh --apply\` or inspect \`backlog.jsonl\` for live state._
 
 ### Backlog decay (open ≥3 days since last update)
 

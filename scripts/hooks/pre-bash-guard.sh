@@ -16,12 +16,16 @@
 
 WORKSPACE="/root/.openclaw/workspace"
 LOG="$WORKSPACE/state/guard-log.jsonl"
+TS=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 
 # Fail-safe trap: any unexpected error → allow + log.
 trap 'echo "{}"; exit 0' ERR
 
 # Session kill switch
 if [ -f "$WORKSPACE/state/.guard-off" ]; then
+  mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
+  printf '{"ts":"%s","blocked":false,"decision":"bypass_session","cmd":"<guard disabled by state/.guard-off>","reason":"Session-wide guard bypass via state/.guard-off"}\n' \
+    "$TS" >> "$LOG" 2>/dev/null || true
   exit 0
 fi
 
@@ -31,6 +35,11 @@ CMD=$(jq -r '.tool_input.command // ""' <<< "$INPUT" 2>/dev/null)
 
 # Per-call kill switch embedded in the command
 if [[ "$CMD" == *"OPENCLAW_GUARD_OFF=1"* ]]; then
+  mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
+  printf '{"ts":"%s","blocked":false,"decision":"bypass_call","cmd":%s,"reason":"Per-call guard bypass via OPENCLAW_GUARD_OFF=1"}\n' \
+    "$TS" \
+    "$(jq -Rc . <<< "$CMD" | head -c 400)" \
+    >> "$LOG" 2>/dev/null || true
   exit 0
 fi
 
@@ -83,7 +92,6 @@ fi
 if [ -n "$REASON" ]; then
   # Log the block decision for audit
   mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
-  TS=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
   printf '{"ts":"%s","blocked":true,"cmd":%s,"reason":%s}\n' \
     "$TS" \
     "$(jq -Rc . <<< "$CMD" | head -c 400)" \
