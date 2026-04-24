@@ -68,3 +68,11 @@ tasks:
     Otherwise reply HEARTBEAT_OK. This keeps the benchmark / print lane
     observable so we notice auth, DNS, API reachability, or writable-state
     regressions before a baseline run silently burns time on timeouts.
+
+- name: dreaming-bridge
+  interval: 24h
+  prompt: |
+    Run `bash scripts/dreaming-bridge.sh`. If the first line starts with
+    `Dreaming-bridge [YES]`, alert with that first line only. Otherwise
+    reply HEARTBEAT_OK. This makes dreaming feed the self-evolving loop
+    when the same recalled material keeps converging across days.

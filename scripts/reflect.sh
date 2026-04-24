@@ -297,6 +297,29 @@ else
   TRACE_SUMMARY_SECTION="_trace-summary.sh not available_"
 fi
 
+# Dreaming bridge (optional helper script)
+DREAMING_BRIDGE_SCRIPT="$WORKSPACE/scripts/dreaming-bridge.sh"
+DREAMING_BRIDGE_INVOKED=0
+if [ -x "$DREAMING_BRIDGE_SCRIPT" ]; then
+  DREAMING_BRIDGE_INVOKED=1
+  DREAMING_BRIDGE_STDERR=$(mktemp)
+  DREAMING_BRIDGE_OUT=$("$DREAMING_BRIDGE_SCRIPT" "$DATE" 2>"$DREAMING_BRIDGE_STDERR")
+  DREAMING_BRIDGE_RC=$?
+  if [ "$DREAMING_BRIDGE_RC" -ne 0 ]; then
+    DREAMING_BRIDGE_SECTION="_warning: dreaming-bridge.sh exited non-zero_"$'\n'"$(cat "$DREAMING_BRIDGE_STDERR")"
+  else
+    DREAMING_BRIDGE_REPORT="$WORKSPACE/reports/dreaming-bridge-$DATE.md"
+    if [ -f "$DREAMING_BRIDGE_REPORT" ]; then
+      DREAMING_BRIDGE_SECTION=$(cat "$DREAMING_BRIDGE_REPORT")
+    else
+      DREAMING_BRIDGE_SECTION="$DREAMING_BRIDGE_OUT"
+    fi
+  fi
+  rm -f "$DREAMING_BRIDGE_STDERR"
+else
+  DREAMING_BRIDGE_SECTION="_dreaming-bridge.sh not available_"
+fi
+
 # Signals read — compute from actual file state at runtime
 SIGNAL_TRACE="\`traces/$DATE.jsonl\` — loaded ($TOTAL rows)"
 if [ -f "$TURNS_FILE" ] && [ -s "$TURNS_FILE" ]; then
@@ -325,6 +348,11 @@ if [ "$TRACE_SUMMARY_INVOKED" -eq 1 ]; then
 else
   SIGNAL_TRACE_SUMMARY="\`scripts/trace-summary.sh\` — _not available_"
 fi
+if [ "$DREAMING_BRIDGE_INVOKED" -eq 1 ]; then
+  SIGNAL_DREAMING_BRIDGE="\`scripts/dreaming-bridge.sh\` — invoked"
+else
+  SIGNAL_DREAMING_BRIDGE="\`scripts/dreaming-bridge.sh\` — _not available_"
+fi
 
 cat > "$OUT" <<EOF
 # Reflect — $DATE
@@ -341,6 +369,7 @@ _Historical snapshot: this report is not live state after generation. For curren
 - $SIGNAL_MISTAKES
 - $SIGNAL_LEARNINGS
 - $SIGNAL_TRACE_SUMMARY
+- $SIGNAL_DREAMING_BRIDGE
 
 ## Volume
 - **Total tool invocations:** $TOTAL
@@ -461,6 +490,10 @@ $LEARNINGS_SECTION
 \`\`\`
 $TRACE_SUMMARY_SECTION
 \`\`\`
+
+## Dreaming bridge
+
+$DREAMING_BRIDGE_SECTION
 
 ## Backlog snapshot at generation time
 
