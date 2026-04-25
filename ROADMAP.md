@@ -57,9 +57,10 @@ When a task pattern appears >N times (N TBD empirically, start ~5) and is struct
 
 Instrumentation is live — signal is accumulating. Tai should nudge God to activate the nightly Reflect→Select→Improve→Evaluate→Commit loop when any of:
 
-- ≥ a week of active daily use
 - ≥ 100 tool invocations logged (check: `scripts/trace-summary.sh`)
 - A repeated pain pattern visible to both parties
+- Bin taxonomy is in place on recent traces
+- `reflect.sh` produces a readable report
 
 Do not activate unilaterally. Activation is an explicit conversation and an explicit cron-wiring step.
 
@@ -79,7 +80,6 @@ Track 1 (Evaluate gate) is done: `evals/run.sh`, 7 seed fixtures, `scripts/eval-
 Before nudging God to activate, ALL of:
 
 - ≥100 tool invocations logged (`scripts/trace-summary.sh`)
-- ≥1 week of active daily use since 2026-04-19
 - ≥1 repeated pain pattern visible (same failure or inefficiency 3+ times)
 - `reflect.sh` stub exists and produces a readable report
 - `bin` taxonomy in place (non-null bins on recent traces)

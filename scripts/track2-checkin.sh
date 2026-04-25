@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Track 2 check-in — fires 7 days after Evaluate-gate shipped (2026-04-19).
-# Runs reflect.sh on today's traces, computes aggregate state since 2026-04-19,
-# and pushes a state-aware Telegram message to God. One-shot by design.
+# Track 2 check-in — computes readiness since Evaluate-gate shipped
+# (2026-04-19) and pushes a state-aware Telegram message to God.
+# The readiness gate is data-conditioned, not time-conditioned.
 #
 # Flags:
 #   --dry-run   Print the composed message to stdout; do NOT push to Telegram.
@@ -50,7 +50,7 @@ done
 SESSIONS=$(sort -u "$SESSIONS_FILE" | wc -l | tr -d ' ')
 rm -f "$SESSIONS_FILE"
 
-# Days elapsed
+# Days elapsed (informational only; no longer a readiness gate)
 DAYS=$(( ( $(date -u -d "$TODAY" +%s) - $(date -u -d "$SHIP_DATE" +%s) ) / 86400 ))
 
 # Bin taxonomy status
@@ -112,7 +112,6 @@ $REPORT_NOTE
 
 Track 3 trigger conditions:
 - ≥100 invocations: $([ "$TOTAL" -ge 100 ] && echo "MET" || echo "not yet")
-- ≥1 week daily use: $([ "$DAYS" -ge 7 ] && echo "MET" || echo "not yet ($DAYS/7 days)")
 - Bin taxonomy in place: $([ "$BIN_NONNULL" -gt 0 ] && echo "MET" || echo "not yet")
 - reflect.sh produces readable report: MET
 - Repeated pain pattern visible: manual review
@@ -134,7 +133,6 @@ STATE_FILE="$WORKSPACE/state/track2-last-state.json"
 mkdir -p "$WORKSPACE/state"
 
 TRIG_INVOC=$([ "$TOTAL" -ge 100 ] && echo 1 || echo 0)
-TRIG_WEEK=$([ "$DAYS" -ge 7 ] && echo 1 || echo 0)
 TRIG_BIN=$([ "$BIN_NONNULL" -gt 0 ] && echo 1 || echo 0)
 PASSRATE=""
 if [ -n "$LAST_EVAL_RUN" ]; then
@@ -145,20 +143,18 @@ if [ -n "$LAST_EVAL_RUN" ]; then
 fi
 
 STATE_NOW=$(jq -cn \
-  --arg ti "$TRIG_INVOC" --arg tw "$TRIG_WEEK" --arg tb "$TRIG_BIN" \
+  --arg ti "$TRIG_INVOC" --arg tb "$TRIG_BIN" \
   --arg pr "$PASSRATE" --arg lr "$LAST_EVAL_RUN" \
-  '{trig_invoc:$ti, trig_week:$tw, trig_bin:$tb, passrate:$pr, last_run:$lr}')
+  '{trig_invoc:$ti, trig_bin:$tb, passrate:$pr, last_run:$lr}')
 
 SHOULD_FIRE=1
 if [ "${TRACK2_FORCE:-0}" != "1" ] && [ -f "$STATE_FILE" ]; then
   PREV=$(cat "$STATE_FILE" 2>/dev/null)
   PREV_TI=$(printf '%s' "$PREV" | jq -r '.trig_invoc // ""')
-  PREV_TW=$(printf '%s' "$PREV" | jq -r '.trig_week // ""')
   PREV_TB=$(printf '%s' "$PREV" | jq -r '.trig_bin // ""')
   PREV_PR=$(printf '%s' "$PREV" | jq -r '.passrate // ""')
   FLIP=0
   [ "$PREV_TI" != "$TRIG_INVOC" ] && FLIP=1
-  [ "$PREV_TW" != "$TRIG_WEEK" ] && FLIP=1
   [ "$PREV_TB" != "$TRIG_BIN" ] && FLIP=1
   if [ -n "$PREV_PR" ] && [ -n "$PASSRATE" ]; then
     DELTA=$(awk -v a="$PASSRATE" -v b="$PREV_PR" 'BEGIN{d=a-b; if(d<0)d=-d; print d}')
