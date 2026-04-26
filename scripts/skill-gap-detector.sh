@@ -76,13 +76,17 @@ if [ "${#TRACE_FILES[@]}" -eq 0 ]; then
 fi
 
 # --- aggregate input_hash counts across window ---
-# Join hash with its tool and class for readable surfacing. Exclude rows where
-# the tool is already a Skill or mcp__openclaw__ primitive — those repeats are
-# already riding a primitive; no gap to close.
+# Focus on conversation-driven execution patterns. Cron housekeeping and pure
+# file-grounding reads are not "missing skills" in the user-facing sense, and
+# they dominated earlier scans with snapshot-wip / mistakes.md noise.
+# Exclude rows where the tool is already a Skill or mcp__openclaw__ primitive —
+# those repeats are already riding a primitive; no gap to close.
 CANDIDATES=$(jq -c -s '
   map(select(
       .input_hash != null
       and .tool != null
+      and .source == "conversation"
+      and .bin == "exec"
       and (.tool | test("^Skill$|^mcp__openclaw__") | not)
     ))
   | group_by(.input_hash)
