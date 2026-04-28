@@ -77,14 +77,14 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
     case "$gtype" in
       regex_negative)
         while IFS= read -r pat; do
-          if grep -qiE "$pat" "$fx_dir/stdout.txt"; then
+          if grep -qiE -- "$pat" "$fx_dir/stdout.txt"; then
             g_result="FAIL"; g_notes="$g_notes;found:$pat"
           fi
         done < <(printf '%s' "$grader" | jq -r '.patterns[]')
         ;;
       regex_positive)
         while IFS= read -r pat; do
-          if ! grep -qiE "$pat" "$fx_dir/stdout.txt"; then
+          if ! grep -qiE -- "$pat" "$fx_dir/stdout.txt"; then
             g_result="FAIL"; g_notes="$g_notes;missing:$pat"
           fi
         done < <(printf '%s' "$grader" | jq -r '.patterns[]')

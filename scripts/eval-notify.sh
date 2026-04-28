@@ -54,10 +54,16 @@ fi
 
 LATEST=$(ls -t "$WORKSPACE/evals/runs/" 2>/dev/null | head -1)
 SUMMARY="$WORKSPACE/evals/runs/${LATEST:-}/summary.tsv"
+REVIEW_BOOTSTRAP_NOTE=""
 
 if [ -z "${LATEST:-}" ] || [ ! -f "$SUMMARY" ]; then
   MSG="Eval regression: harness exited $EXIT but no summary.tsv was found. Check $WORKSPACE/evals/runs/."
 else
+  if BOOTSTRAP_OUT=$(bash "$WORKSPACE/scripts/eval-review-bootstrap.sh" "$LATEST" 2>/dev/null); then
+    REVIEW_BOOTSTRAP_NOTE="Review bootstrap:
+- $BOOTSTRAP_OUT
+"
+  fi
   PASS_COUNT=0
   FAIL_COUNT=0
   FAIL_LIST=""
@@ -100,6 +106,7 @@ What changed:
 $BUCKET_SUMMARY
 Standouts:
 $FAIL_LIST
+${REVIEW_BOOTSTRAP_NOTE}
 For me, the full machine-readable triage is still useful, but the raw alert is mostly a pointer:
 - Triage: bash $WORKSPACE/scripts/eval-triage.sh $LATEST
 - Artifacts: $WORKSPACE/evals/runs/$LATEST/"
