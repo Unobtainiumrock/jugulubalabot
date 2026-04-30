@@ -62,18 +62,27 @@ elif [ "$BIN_NONNULL" -gt 0 ]; then
   BIN_STATUS="partial — $PCT of rows tagged"
 fi
 
-# Last eval run result. Must use the newest run that has `done.marker`:
-# partial in-progress runs have a half-populated summary.tsv and cause the
-# "3 pass / 3 fail" stale-number bug (2026-04-22 03:01 check-in fired while
-# 20260422T030007Z was still running).
+# Last eval run result. Must use the newest run that has `done.marker` AND
+# matches the full fixture-set size — partial subagent gate runs (e.g.
+# improve.sh re-running the failing subset via FIXTURES=...) leave a
+# half-populated summary.tsv whose pass/fail wouldn't represent the daily
+# score. Caught 2026-04-30 when track2-checkin reported "0 pass / 8 fail"
+# after improve.sh's gate run (8-fixture filter).
+EXPECTED_FIXTURES=$(ls "$WORKSPACE/evals/fixtures"/*.json 2>/dev/null | wc -l | tr -d ' ')
 LAST_EVAL_RUN=""
 for r in $(ls -t "$WORKSPACE/evals/runs/" 2>/dev/null); do
-  if [ -f "$WORKSPACE/evals/runs/$r/done.marker" ]; then
+  marker="$WORKSPACE/evals/runs/$r/done.marker"
+  [ -f "$marker" ] || continue
+  rp=$(jq -r '.pass // 0' "$marker")
+  rf=$(jq -r '.fail // 0' "$marker")
+  rt=$(( rp + rf ))
+  # Only accept full-set runs. EXPECTED_FIXTURES==0 fallback = pre-fixture-state.
+  if [ "$EXPECTED_FIXTURES" -eq 0 ] || [ "$rt" -eq "$EXPECTED_FIXTURES" ]; then
     LAST_EVAL_RUN="$r"
     break
   fi
 done
-EVAL_STATUS="no completed runs yet"
+EVAL_STATUS="no completed full-set runs yet"
 if [ -n "$LAST_EVAL_RUN" ]; then
   MARKER="$WORKSPACE/evals/runs/$LAST_EVAL_RUN/done.marker"
   EVAL_PASS=$(jq -r '.pass' "$MARKER")
@@ -89,15 +98,34 @@ else
   REPORT_NOTE="No trace data for $TODAY — nothing to reflect on."
 fi
 
-# Count how many distinct-day Reflect reports exist in reports/. Used to decide
-# whether to advertise "first Reflect pass" (0 reports) vs. "close next loop
-# iteration" (>=1 report). Stops the check-in from re-running day-zero framing
-# forever (caught manually 2026-04-21).
+# Loop status. Track 4 (Improve) is automated as of 2026-04-29. Read today's
+# improve.jsonl tail — if the loop ran, report what it produced; otherwise
+# fall back to the legacy "manual Select → Improve" nudge so pre-Track-4
+# states still render meaningfully.
 REFLECT_DAYS=$(ls "$WORKSPACE"/reports/reflect-*.md 2>/dev/null | wc -l | tr -d ' ')
-if [ "$REFLECT_DAYS" -le 0 ]; then
+IMPROVE_LOG="$WORKSPACE/reports/improve-$TODAY.jsonl"
+if [ -f "$IMPROVE_LOG" ] && [ -s "$IMPROVE_LOG" ]; then
+  # Prefer the latest "real" attempt (subagent actually ran). Dry-runs and
+  # abort_dirty_tree are bookkeeping noise — they shouldn't shadow today's
+  # real Track 4 outcome.
+  LAST_IMP=$(jq -c 'select(.result != "dry_run" and .result != "abort_dirty_tree")' \
+              "$IMPROVE_LOG" 2>/dev/null | tail -n 1)
+  [ -z "$LAST_IMP" ] && LAST_IMP=$(tail -n 1 "$IMPROVE_LOG")
+  IMP_RESULT=$(printf '%s' "$LAST_IMP" | jq -r '.result // "unknown"')
+  IMP_SLUG=$(printf '%s' "$LAST_IMP" | jq -r '.slug // "?"')
+  case "$IMP_RESULT" in
+    merged) LOOP_LINE="Track 4 loop ran today: ✅ merged \`$IMP_SLUG\`." ;;
+    left_open) LOOP_LINE="Track 4 loop ran today: 🟢 \`$IMP_SLUG\` passed gate; branch left open (week-1 no-merge)." ;;
+    rollback_*) LOOP_LINE="Track 4 loop ran today: 🔴 rolled back \`$IMP_SLUG\` ($IMP_RESULT). See reports/improve-$TODAY-${IMP_SLUG}.{subagent,eval}.log." ;;
+    abort_*|no_changes|subagent_fail|commit_fail|merge_conflict)
+            LOOP_LINE="Track 4 loop ran today: ⚠️ aborted on \`$IMP_SLUG\` ($IMP_RESULT)." ;;
+    dry_run) LOOP_LINE="Track 4 loop: dry-run only on \`$IMP_SLUG\` (no real attempt today)." ;;
+    *) LOOP_LINE="Track 4 loop ran today: result=$IMP_RESULT slug=\`$IMP_SLUG\`." ;;
+  esac
+elif [ "$REFLECT_DAYS" -le 0 ]; then
   LOOP_LINE="If the first three are MET, do the first manual Reflect pass. Reply /reflect to start."
 else
-  LOOP_LINE="Reflect has run ${REFLECT_DAYS}× so far. Next move is Select → Improve on a pattern today's report surfaced (see Hypotheses section)."
+  LOOP_LINE="Reflect has run ${REFLECT_DAYS}× so far. Track 4 loop hasn't fired today — check cron + reports/sepl-loop-$TODAY.log."
 fi
 
 MSG=$(cat <<EOF

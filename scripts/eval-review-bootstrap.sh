@@ -19,25 +19,35 @@ fixture_summary() {
   case "$1" in
     backlog-groom-on-close) echo "code-shipped does not yet imply backlog-registry closed" ;;
     budget-lag-honesty) echo "budget wording is still vulnerable to sounding more exact than it is" ;;
+    concrete-options-on-proposals) echo "option lists still need each option shown as concrete artifact, not abstract label" ;;
+    enforcement-over-memory) echo "automatic-behavior asks still get answered with memory/preference, not a hook in settings.json" ;;
+    explicit-noop-hypothesis) echo "green-day reviews still need an explicit no-op hypothesis instead of an empty Hypotheses block" ;;
     layer-confusion) echo "capability answers still need the Claude Code vs OpenClaw layer split named explicitly" ;;
     loop-on-infra-friction) echo "infra recovery answers still drift into option menus instead of a committed sequence" ;;
+    mobile-echo-files-on-telegram) echo "telegram replies still need created/modified file contents inlined, not just paths cited" ;;
+    no-filler) echo "responses still drift into hedge-and-filler openings instead of skipping to the help" ;;
     one-shot-cron-recognition) echo "cron-shaped scripts still need an automatic dry-run / side-effect warning reflex" ;;
     orange-budget-triggers-peek) echo "ORANGE budget alerts are not yet reliably changing the plan" ;;
     plain-english-default) echo "high-level explanations still drift into structured technical framing" ;;
+    prefer-mkscript) echo "new shell scripts still get authored via Write+chmod instead of mkscript" ;;
     review-bypass) echo "review gates are still easy to route around by being too solution-shaped" ;;
     review-sidecar-not-main-report) echo "file-choice answers still need to name the review sidecar directly" ;;
     review-structure-complete) echo "minimal review stubs still need real content instead of placeholders" ;;
+    soul-read-on-rules-question) echo "rules-and-tone questions still need SOUL.md read before answering" ;;
+    terse-factual) echo "factual prompts still get answered with structure when terse-prose is correct" ;;
+    token-burn-proposal) echo "repeat-pattern recognition still gets discussed instead of proposing the deterministic script" ;;
+    trace-count-uses-wc) echo "trace counting still uses pipelines that miscount instead of plain wc -l on the jsonl" ;;
     *) echo "the fixture failed its contract" ;;
   esac
 }
 
 fixture_bucket() {
   case "$1" in
-    review-bypass|review-sidecar-not-main-report|review-structure-complete|backlog-groom-on-close)
+    review-bypass|review-sidecar-not-main-report|review-structure-complete|backlog-groom-on-close|explicit-noop-hypothesis)
       echo "workflow / review discipline" ;;
-    layer-confusion|one-shot-cron-recognition|orange-budget-triggers-peek|loop-on-infra-friction)
+    layer-confusion|one-shot-cron-recognition|orange-budget-triggers-peek|loop-on-infra-friction|enforcement-over-memory|prefer-mkscript|mobile-echo-files-on-telegram|soul-read-on-rules-question)
       echo "operator judgment under constraints" ;;
-    plain-english-default|budget-lag-honesty)
+    plain-english-default|budget-lag-honesty|no-filler|terse-factual|concrete-options-on-proposals|token-burn-proposal|trace-count-uses-wc)
       echo "answer shape / wording" ;;
     *)
       echo "other" ;;
@@ -107,9 +117,8 @@ cat > "$REVIEW" <<EOF2
 
 ## Next-step candidates
 
-- [ ] Tighten the guidance for `${fx1:-the top failing fixture}`${lead1:+ ($lead1)}${fx2:+ and `$fx2`}${lead2:+ ($lead2)} until the targeted rerun changes shape, not just wording.
-- [ ] Re-run the failing fixture set from $RUN_ID after the guidance/code changes and compare against this baseline.
-- [ ] If the targeted rerun improves, run `scripts/select.sh $REVIEW` to rank the next concrete improve candidate.
+- [ ] Tighten the guidance for \`${fx1:-the top failing fixture}\`${lead1:+ ($lead1)} until the rerun on that fixture changes shape, not just wording.${fx2:+
+- [ ] Tighten the guidance for \`$fx2\`${lead2:+ ($lead2)} until the rerun on that fixture changes shape, not just wording.}
 EOF2
 
 printf 'wrote %s from eval run %s (%s fail / %s pass)\n' "$REVIEW" "$RUN_ID" "$FAIL_COUNT" "$PASS_COUNT"
