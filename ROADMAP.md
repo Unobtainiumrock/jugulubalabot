@@ -91,11 +91,13 @@ When all fire, the first manual Reflect pass runs:
 3. Convert the clearest token-burn candidate to a deterministic script.
 4. Schedule nightly `eval-notify.sh` via `openclaw cron` (regression alerts only, not the full loop yet).
 
-### Track 4 — Full loop activation (week 2+, only after Track 3 stable)
+### Track 4 — Full loop activation [WIRED 2026-04-30]
 
-- Wire **Select:** GA-style variant generation (pattern: God's `genetic-algorithms` repo). For each hypothesis, produce N candidate edits.
-- Wire **Improve:** each candidate lands on branch `sepl/<date>-<hypothesis>`. Evals run via the existing harness. Pass → auto-merge to master. Fail → auto-rollback.
-- Schedule full nightly cron at 03:00 UTC: Reflect → Select → Improve → Evaluate → Commit.
-- Wire weekly report: `reports/week-YYYY-WW.md` — skills created, proposals rejected at Commit, token-burn conversions shipped.
+- **Select** — `scripts/select.sh`. Heuristic scoring (no LLM); reads `reports/reflect-<date>-review.md` and writes `reports/select-<date>.md` ranked by `burn×2 + cov×2 + rev − risk`.
+- **Improve** — `scripts/improve.sh <select-id> <slug>`. Spawns a Claude Code subagent on branch `sepl/<date>-<slug>`, gates on `evals/run.sh`, auto-merges green / auto-rolls-back red. `IMPROVE_NO_MERGE=1` keeps the branch open instead of merging.
+- **Daily wrapper** — `scripts/sepl-improve-loop.sh`. Picks rank-1 from today's select report, runs improve, sends a one-line Telegram digest (merged / rolled-back / left-open / no-op). Inlines a green-day no-op stub for the review sidecar so Select always has input.
+- **Cron** — `daily-sepl-improve-loop` (id `15b99c89-30ec-472d-8856-228ac6d4d735`), cron `30 3 * * *` UTC. 03:00 slot was already taken by `nightly-health-check`; 03:30 leaves the eval gate and memory dreaming room to settle first.
+- **Week-1 safety** — `IMPROVE_NO_MERGE=1` is the wrapper default. Branches accumulate under `sepl/<date>-<slug>`, eval-gated but un-merged, until the first week's runs are reviewed and the env knob is flipped.
+- **Weekly report** — `reports/week-YYYY-WW.md` (skills shipped, proposals rejected at Commit, token-burn conversions). Not yet wired; deferred until the nightly loop produces enough signal to summarize.
 
 Cross-references: SOUL.md line 33 (self-modification rules), commit `2f61cb3`/`942a0d4` (Evaluate gate), `evals/README.md` (harness usage).
