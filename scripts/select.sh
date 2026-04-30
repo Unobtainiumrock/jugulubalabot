@@ -54,6 +54,26 @@ if [ "${#raw[@]}" -eq 0 ]; then
   exit 2
 fi
 
+# Filter out shape-violating candidates (rerun/audit/observation tautologies).
+# 2026-04-30: Track 4 burned a cycle on "Re-run the failing fixture set" because
+# nothing rejected non-implementable candidates upstream of improve.sh.
+filtered=()
+shape_guard="$WORKSPACE/scripts/guards/candidate-shape.sh"
+if [ -x "$shape_guard" ]; then
+  for body in "${raw[@]}"; do
+    if bash "$shape_guard" "$body" >/dev/null 2>&1; then
+      filtered+=("$body")
+    else
+      echo "select: dropping shape-violating candidate: $body" >&2
+    fi
+  done
+  if [ "${#filtered[@]}" -eq 0 ]; then
+    echo "select: all candidates failed candidate-shape guard — nothing implementable in $input" >&2
+    exit 2
+  fi
+  raw=("${filtered[@]}")
+fi
+
 # Cheap scoring heuristics. Each candidate gets:
 #   reversibility   — high if it touches scripts/hooks/evals (revertable);
 #                     low if it edits memory/SOUL/AGENTS (rule changes).

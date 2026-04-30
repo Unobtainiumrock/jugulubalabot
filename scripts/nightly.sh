@@ -63,4 +63,11 @@ Review: workspace/traces/$YESTERDAY.jsonl"
 fi
 bump_overall "$BIN_EXIT"
 
+# --- 4. Track 2 check-in (status ping) -----------------------------------
+# Chained here so the check-in always runs *after* evals/run.sh has finished
+# and produced a done.marker. Standalone cron at 03:03 still fires but
+# defers itself if today's eval isn't done yet (see track2-checkin.sh).
+# Failure is non-blocking (status ping, not gated).
+bash "$WORKSPACE/scripts/track2-checkin.sh" >/dev/null 2>&1 || true
+
 exit "$OVERALL"

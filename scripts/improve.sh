@@ -79,13 +79,61 @@ echo "improve: branch=$branch"
 echo "improve: candidate=$candidate_body"
 echo
 
+# Implementability pre-check: refuse the candidate before spawning a 600s
+# subagent if it's observation-shaped (rerun/audit/etc.) or names no concrete
+# deliverable. select.sh already runs this guard on full candidate lists, but
+# improve.sh is also reachable via direct CLI invocation, so re-run here.
+shape_guard="$WORKSPACE/scripts/guards/candidate-shape.sh"
+if [ -x "$shape_guard" ]; then
+  if ! bash "$shape_guard" "$candidate_body" >&2; then
+    echo "improve: candidate failed shape guard — refusing to spawn subagent" >&2
+    git checkout -q master
+    git branch -q -D "$branch" 2>/dev/null || true
+    log_attempt "abort_shape_guard" "candidate=$candidate_body"
+    exit 3
+  fi
+fi
+
 if [ "${IMPROVE_DRY_RUN:-0}" = "1" ]; then
-  echo "improve: DRY_RUN — brief above, not spawning subagent"
+  echo "improve: DRY_RUN — brief above, not spawning subagent (skipping baseline eval)"
   log_attempt "dry_run" "brief printed only"
   git checkout -q master
   git branch -q -D "$branch" 2>/dev/null || true
   exit 0
 fi
+
+# Compute baseline fail-set on master, cached by master sha. The gate is a
+# delta-vs-baseline check, not absolute pass/fail — a candidate that lands
+# on a red eval set should only roll back if it makes things worse.
+# We run the baseline against master's working tree, so do this BEFORE the
+# subagent edits the branch (we're now on the branch but it's identical to
+# master until the subagent changes things — checking out master to be safe).
+baseline_cache="$REPORTS/eval-baseline-master-${master_sha}.fails"
+if [ ! -f "$baseline_cache" ]; then
+  echo "improve: no baseline cache for master ${master_sha:0:7} — running eval on master"
+  git checkout -q master
+  baseline_log="$REPORTS/improve-${TODAY}-baseline-${master_sha:0:7}.eval.log"
+  bash "$WORKSPACE/evals/run.sh" > "$baseline_log" 2>&1
+  base_exit=$?
+  if [ "$base_exit" -eq 2 ]; then
+    echo "improve: master baseline hit meta-shape guard — aborting" >&2
+    git branch -q -D "$branch" 2>/dev/null || true
+    log_attempt "abort_baseline_meta" "exit=$base_exit log=$baseline_log"
+    exit 1
+  fi
+  base_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$baseline_log")
+  if [ -z "$base_run_dir" ] || [ ! -f "$base_run_dir/summary.tsv" ]; then
+    echo "improve: baseline produced no summary.tsv — aborting" >&2
+    git branch -q -D "$branch" 2>/dev/null || true
+    log_attempt "abort_baseline_no_summary" "log=$baseline_log"
+    exit 1
+  fi
+  awk -F'\t' 'NR>1 && $2=="FAIL"{print $1}' "$base_run_dir/summary.tsv" \
+    | sort -u > "$baseline_cache"
+  git checkout -q "$branch"
+fi
+baseline_fail_count=$(wc -l < "$baseline_cache" | tr -d ' ')
+echo "improve: baseline on master ${master_sha:0:7} — ${baseline_fail_count} failing fixtures"
 
 # Spawn the subagent. Brief is the candidate body + workspace conventions
 # pointer. Subagent runs with bypassPermissions so it can edit files freely;
@@ -141,34 +189,67 @@ Branch: $branch
 Subagent log: $subagent_log" \
   || { echo "improve: commit failed"; log_attempt "commit_fail" "git commit returned non-zero"; exit 1; }
 
-# Eval gate.
+# Eval gate. Delta-vs-master: rollback only if the branch introduces a fixture
+# that fails on the branch but passed on master. Same-or-better is green.
 echo "improve: running evals/run.sh as the gate"
 eval_log="$REPORTS/improve-${TODAY}-${slug}.eval.log"
 bash "$WORKSPACE/evals/run.sh" > "$eval_log" 2>&1
 eval_exit=$?
 
-if [ "$eval_exit" -ne 0 ]; then
-  echo "improve: evals FAILED (exit=$eval_exit) — rolling back"
+if [ "$eval_exit" -eq 2 ]; then
+  echo "improve: branch eval hit meta-shape guard — rolling back"
   git checkout -q master
   git branch -q -D "$branch"
-  log_attempt "rollback_eval_fail" "eval_exit=$eval_exit log=$eval_log"
+  log_attempt "rollback_meta_guard" "eval_exit=$eval_exit log=$eval_log"
   exit 1
 fi
 
-if [ "${IMPROVE_NO_MERGE:-0}" = "1" ]; then
-  echo "improve: evals green; IMPROVE_NO_MERGE=1, leaving branch $branch for review"
+branch_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$eval_log")
+if [ -z "$branch_run_dir" ] || [ ! -f "$branch_run_dir/summary.tsv" ]; then
+  echo "improve: branch eval produced no summary.tsv — rolling back"
   git checkout -q master
-  log_attempt "left_open" "branch ready: $branch"
+  git branch -q -D "$branch"
+  log_attempt "rollback_no_summary" "log=$eval_log"
+  exit 1
+fi
+
+branch_fails_file=$(mktemp)
+awk -F'\t' 'NR>1 && $2=="FAIL"{print $1}' "$branch_run_dir/summary.tsv" \
+  | sort -u > "$branch_fails_file"
+
+regressions=$(comm -23 "$branch_fails_file" "$baseline_cache")
+improvements=$(comm -13 "$branch_fails_file" "$baseline_cache")
+reg_count=$(printf '%s\n' "$regressions" | grep -c . || true)
+imp_count=$(printf '%s\n' "$improvements" | grep -c . || true)
+rm -f "$branch_fails_file"
+
+if [ "$reg_count" -gt 0 ]; then
+  reg_csv=$(printf '%s' "$regressions" | tr '\n' ',' | sed 's/,$//')
+  echo "improve: $reg_count regression(s) vs master ${master_sha:0:7}: $reg_csv — rolling back"
+  git checkout -q master
+  git branch -q -D "$branch"
+  log_attempt "rollback_regression" "regressions=$reg_csv improvements=$imp_count log=$eval_log"
+  exit 1
+fi
+
+echo "improve: no regressions vs master ${master_sha:0:7} (improvements=$imp_count)"
+
+if [ "${IMPROVE_NO_MERGE:-0}" = "1" ]; then
+  echo "improve: gate green; IMPROVE_NO_MERGE=1, leaving branch $branch for review"
+  git checkout -q master
+  log_attempt "left_open" "branch ready: $branch improvements=$imp_count"
   exit 2
 fi
 
 # Merge to master. Use --no-ff so the SEPL merge is auditable in log.
-echo "improve: evals green, merging $branch -> master"
+echo "improve: gate green (delta vs master), merging $branch -> master"
 git checkout -q master
 git merge --no-ff -q -m "sepl/merge: $slug
 
-Improve candidate from $select_id passed evals, merging.
+Improve candidate from $select_id passed delta-vs-master gate, merging.
 Branch: $branch
+Master baseline sha: ${master_sha:0:7} (${baseline_fail_count} failing fixtures)
+Improvements vs baseline: ${imp_count}
 Eval log: $eval_log" \
   "$branch"
 merge_exit=$?
@@ -183,5 +264,5 @@ fi
 # Cleanup branch (kept in reflog if needed). Master post-commit hook handles push.
 git branch -q -d "$branch"
 echo "improve: merged $branch into master (post-commit hook will push)"
-log_attempt "merged" "master sha=$(git rev-parse --short master)"
+log_attempt "merged" "master sha=$(git rev-parse --short master) improvements=$imp_count"
 exit 0

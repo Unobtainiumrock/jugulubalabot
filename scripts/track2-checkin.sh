@@ -70,18 +70,32 @@ fi
 # after improve.sh's gate run (8-fixture filter).
 EXPECTED_FIXTURES=$(ls "$WORKSPACE/evals/fixtures"/*.json 2>/dev/null | wc -l | tr -d ' ')
 LAST_EVAL_RUN=""
+TODAY_FULL_RUN=""
 for r in $(ls -t "$WORKSPACE/evals/runs/" 2>/dev/null); do
   marker="$WORKSPACE/evals/runs/$r/done.marker"
   [ -f "$marker" ] || continue
   rp=$(jq -r '.pass // 0' "$marker")
   rf=$(jq -r '.fail // 0' "$marker")
   rt=$(( rp + rf ))
-  # Only accept full-set runs. EXPECTED_FIXTURES==0 fallback = pre-fixture-state.
   if [ "$EXPECTED_FIXTURES" -eq 0 ] || [ "$rt" -eq "$EXPECTED_FIXTURES" ]; then
-    LAST_EVAL_RUN="$r"
-    break
+    [ -z "$LAST_EVAL_RUN" ] && LAST_EVAL_RUN="$r"
+    if [[ "$r" == "${TODAY//-/}"* ]] && [ -z "$TODAY_FULL_RUN" ]; then
+      TODAY_FULL_RUN="$r"
+    fi
   fi
 done
+
+# Race-defense: if today's nightly evals haven't produced a full-set run yet
+# (e.g. track2 cron fires at 03:03 while evals/run.sh is mid-run from 03:00),
+# skip this push. nightly.sh appends a guaranteed track2 invocation at the
+# end of its flow, so we'll get a clean run later. Override: TRACK2_FORCE=1.
+# Skip only when this run was triggered by cron (i.e. unattended) — manual
+# --dry-run / interactive smoke tests should always render.
+if [ -z "$TODAY_FULL_RUN" ] && [ "${TRACK2_FORCE:-0}" != "1" ] && [ "$DRY_RUN" -ne 1 ] && [ -n "${OPENCLAW_TRACE_SOURCE:-}" ]; then
+  case "${OPENCLAW_TRACE_SOURCE:-}" in
+    cron) echo "track2-checkin: today's nightly evals not yet complete — deferring (will re-fire after nightly.sh tail invocation)"; exit 0 ;;
+  esac
+fi
 EVAL_STATUS="no completed full-set runs yet"
 if [ -n "$LAST_EVAL_RUN" ]; then
   MARKER="$WORKSPACE/evals/runs/$LAST_EVAL_RUN/done.marker"
