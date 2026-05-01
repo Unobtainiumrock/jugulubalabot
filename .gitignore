@@ -1,6 +1,9 @@
 # OpenClaw runtime state (ephemeral; regenerated on demand)
 .openclaw/
-state/
+state/*
+# bin-overrides.jsonl is persistent classifier knowledge — auto-heal accumulates
+# decisions here; track so a wipe doesn't lose them.
+!state/bin-overrides.jsonl
 
 # Daily memory journal — agent-owned, high churn
 memory/

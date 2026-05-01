@@ -48,18 +48,38 @@ bash "$WORKSPACE/scripts/heat-counter.sh" "$YESTERDAY" >/dev/null 2>&1 || true
 bash "$WORKSPACE/scripts/v2-readiness-check.sh" >/dev/null 2>&1 || true
 
 # --- 3. Bin classifier health on yesterday's traces -----------------------
-BIN_OUTPUT=$(bash "$WORKSPACE/scripts/bin-sanity.sh" "$YESTERDAY" 2>&1)
+# Raw bin-sanity output is for the agent (kept in reports/); the user gets a
+# human-shaped summary or a self-healed line, not the JSON snippets.
+BIN_REPORT="$WORKSPACE/reports/bin-sanity-$YESTERDAY.log"
+bash "$WORKSPACE/scripts/bin-sanity.sh" "$YESTERDAY" >"$BIN_REPORT" 2>&1
 BIN_EXIT=$?
 
 if [ "$BIN_EXIT" -ne 0 ]; then
-  MSG="Bin classifier gap — $YESTERDAY
+  # First try to self-heal — name-based inference into bin-overrides.jsonl.
+  HEAL_REPORT="$WORKSPACE/reports/bin-autoheal-$YESTERDAY.log"
+  bash "$WORKSPACE/scripts/bin-autoheal.sh" "$YESTERDAY" >"$HEAL_REPORT" 2>&1
+  HEAL_EXIT=$?
+  HEALED=$(grep '^HEALED: ' "$HEAL_REPORT" 2>/dev/null | sed 's/^HEALED: //' | paste -sd ', ')
+  UNHEALED=$(grep '^UNHEALED: ' "$HEAL_REPORT" 2>/dev/null | sed 's/^UNHEALED: //')
 
-$BIN_OUTPUT
+  cd "$WORKSPACE"
+  if ! git diff --quiet -- state/bin-overrides.jsonl 2>/dev/null; then
+    git add state/bin-overrides.jsonl
+    git commit -q -m "auto: bin-autoheal $YESTERDAY
 
-Decide: add rule / new bin / escalate to LLM classifier.
-Review: workspace/traces/$YESTERDAY.jsonl"
-  "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
-    --message "$MSG" < /dev/null || true
+Mapped: $HEALED" || true
+  fi
+
+  if [ "$HEAL_EXIT" -eq 0 ] && [ -n "$HEALED" ]; then
+    MSG="Bin classifier — self-healed for $YESTERDAY: $HEALED. Future traces classify automatically; no action needed."
+    "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
+      --message "$MSG" < /dev/null || true
+    BIN_EXIT=0   # gap closed; don't gate the cron status
+  elif [ "$HEAL_EXIT" -ne 0 ]; then
+    MSG="Bin classifier — needs your call for $YESTERDAY: $UNHEALED. Pick a bin (file_ground / self_modify / agent_spawn / exec / scheduling / external_fetch / comms / memory_update) and append to state/bin-overrides.jsonl. Raw: reports/bin-sanity-$YESTERDAY.log"
+    "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
+      --message "$MSG" < /dev/null || true
+  fi
 fi
 bump_overall "$BIN_EXIT"
 

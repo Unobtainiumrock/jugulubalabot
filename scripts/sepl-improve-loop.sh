@@ -39,9 +39,46 @@ notify() {
     --target "$DIGEST_TARGET" --message "$1" </dev/null || true
 }
 
+# If the only dirty file is MEMORY.md and the diff is a memory-promotion
+# (contains the `openclaw-memory-promotion` marker), commit it ourselves so
+# improve.sh sees a clean tree. The 03:00 UTC dream-promotion systemEvent
+# writes MEMORY.md but doesn't commit; without this guard the 03:30 SEPL run
+# aborts every day there's a promotion. Anything broader than that — staged
+# changes, other modified files, untracked workspace edits — is not ours to
+# touch and falls through to improve.sh's normal dirty-tree refusal.
+auto_commit_memory_promotion_if_clean() {
+  cd "$WORKSPACE"
+  # Any staged changes? Bail.
+  if ! git diff --cached --quiet; then return 1; fi
+  # Any untracked files? Bail.
+  if [ -n "$(git ls-files --others --exclude-standard)" ]; then return 1; fi
+  local dirty
+  dirty=$(git diff --name-only)
+  if [ "$dirty" != "MEMORY.md" ]; then return 1; fi
+  if ! git diff -- MEMORY.md | grep -q '<!-- openclaw-memory-promotion:'; then
+    return 1
+  fi
+  git add MEMORY.md
+  git commit -q -m "auto: memory promotion $(date -u +%F)
+
+Pre-SEPL guard: dream-promotion systemEvent at 03:00 UTC writes MEMORY.md
+without committing. SEPL improve at 03:30 needs a clean tree, so we commit
+the promotion ourselves when (a) MEMORY.md is the only dirty file and (b)
+the diff carries the openclaw-memory-promotion marker." \
+    || return 1
+  return 0
+}
+
 main() {
   echo "=== sepl-improve-loop $(date -u +%FT%TZ) ==="
   cd "$WORKSPACE"
+
+  # Step 0 — if the dream-promotion left MEMORY.md uncommitted, commit it
+  # ourselves so improve.sh's dirty-tree guard doesn't trip. Silent on
+  # the success path (it's plumbing); only alert on outcomes.
+  if ! git diff --quiet -- MEMORY.md && auto_commit_memory_promotion_if_clean; then
+    echo "step0: auto-committed memory-promotion delta to keep tree clean"
+  fi
 
   # Step 1 — ensure a review sidecar exists. eval-review-bootstrap.sh seeds
   # one on red eval days; green days fall through here and we lay down a
@@ -114,7 +151,19 @@ EOF_INNER
        return 0 ;;
     1) notify "SEPL loop $TODAY: 🔴 rolled back \`$SLUG\`. logs: reports/improve-$TODAY-$SLUG.{subagent,eval}.log"
        return 1 ;;
-    3) notify "SEPL loop $TODAY: ⚠️ improve.sh input error for \`$SLUG\` (rc=3)."
+    3) # Translate improve.sh's structured exit reason into a human line.
+       reason=$(awk -F'"result":"' '
+         NR==FNR && /"ts":"'"$TODAY"'/ { last=$2 }
+         END { sub(/".*/, "", last); print last }
+       ' "$REPORTS/improve-$TODAY.jsonl" "$REPORTS/improve-$TODAY.jsonl" 2>/dev/null)
+       case "$reason" in
+         abort_dirty_tree)
+           notify "SEPL loop $TODAY: ⚠️ skipped — workspace had uncommitted changes at 03:30 UTC. Tomorrow's run will pick up where this left off (see backlog: \`$SLUG\`)." ;;
+         abort_shape_guard)
+           notify "SEPL loop $TODAY: ⚠️ skipped \`$SLUG\` — candidate is observation-shaped (audit/rerun), not implementable. Reflect should rephrase as a concrete change." ;;
+         *)
+           notify "SEPL loop $TODAY: ⚠️ improve refused \`$SLUG\` at input — reason: ${reason:-unknown}. Log: reports/improve-$TODAY.jsonl" ;;
+       esac
        return 3 ;;
     *) notify "SEPL loop $TODAY: ⚠️ improve.sh unexpected exit=$imp_rc for \`$SLUG\`."
        return "$imp_rc" ;;

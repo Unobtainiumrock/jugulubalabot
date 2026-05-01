@@ -82,7 +82,8 @@ CLASS=$(printf '%s' "$PAYLOAD" | jq -r '
   end' 2>/dev/null || echo "")
 
 # Semantic bin — coarse intent bucket. Classifier is deliberately small; edge
-# cases fall through to "exec" or "other" and are surfaced by bin-sanity.sh.
+# cases fall through to "other" and are healed by bin-autoheal.sh into
+# state/bin-overrides.jsonl, which we consult as a fallback below.
 BIN=$(printf '%s' "$PAYLOAD" | jq -r '
   .tool_name as $t |
   .tool_input as $i |
@@ -109,6 +110,17 @@ BIN=$(printf '%s' "$PAYLOAD" | jq -r '
   elif ($t | startswith("mcp__openclaw__")) then "external_fetch"
   else "other"
   end' 2>/dev/null || echo "other")
+
+# Fallback: if the inline classifier returned "other", consult the autoheal
+# overrides file. Cheap because (a) we only enter this branch on misses and
+# (b) we shortcircuit with grep before invoking jq.
+OVERRIDES_FILE="/root/.openclaw/workspace/state/bin-overrides.jsonl"
+if [ "$BIN" = "other" ] && [ -s "$OVERRIDES_FILE" ]; then
+  if grep -qF "\"tool\":\"$TOOL\"" "$OVERRIDES_FILE" 2>/dev/null; then
+    OVERRIDE=$(jq -r --arg t "$TOOL" 'select(.tool == $t) | .bin' "$OVERRIDES_FILE" 2>/dev/null | head -1)
+    [ -n "$OVERRIDE" ] && BIN="$OVERRIDE"
+  fi
+fi
 
 # Touched paths — JSON array of workspace-relative file paths the call acted on.
 # Consumed by heat-counter.sh to build state/file-heat.jsonl. Kept cheap: only
