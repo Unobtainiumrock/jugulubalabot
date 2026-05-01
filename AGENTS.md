@@ -145,6 +145,18 @@ Pattern any new alerting script should follow:
 
 Existing emitters wired this way: `scripts/nightly.sh` (bin classifier), `scripts/sepl-improve-loop.sh` (improve.sh exit reasons). Use them as the template when adding new ones.
 
+### Self-read of automated logs: the user shouldn't paste them back
+
+If a cron lane breaks, the agent should know about it on its own — by reading the lane's report file — before the user has to paste the failure into chat. The `auto-log-sweep` heartbeat task (runs once per 24h) sweeps yesterday's automated outputs (`reports/sepl-loop-*.log`, `reports/improve-*.jsonl`, `reports/nightly-*.log`, `reports/bin-sanity-*.txt`, MEMORY.md commit lane) and surfaces a single human verdict: `[OK]` (silent), `[HEAL]` (FYI; lane self-healed), `[ATTN]` (one bullet per affected lane, no raw `rc=N` / stderr).
+
+When you add a new automated lane, add a corresponding stanza in `scripts/auto-log-sweep.sh` so its outcomes show up in the daily sweep. Lane authors own the verdict-extraction line for their lane.
+
+### Durable-state writes commit themselves
+
+Any automated process that mutates a tracked durable-state file (`MEMORY.md`, `learnings.md`, `mistakes.md`, etc.) is responsible for committing its own delta. Leaving a tracked file dirty after an automated write is a coordination bug — it propagates into the next git operation and (as on 2026-05-01 03:30) silently aborts unrelated cron lanes.
+
+Working template: `scripts/memory-promote-commit.sh` runs at 03:10 UTC (cron `daily-memory-promote-commit`), 10 minutes after the dream-promotion writes MEMORY.md and 20 minutes before SEPL needs a clean tree. Idempotent; refuses to commit anything that lacks the promotion marker. Pattern for new durable-state writers: tight follow-up cron, marker-gated, idempotent.
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**

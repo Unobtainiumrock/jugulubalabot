@@ -76,3 +76,15 @@ tasks:
     `Dreaming-bridge [YES]`, alert with that first line only. Otherwise
     reply HEARTBEAT_OK. This makes dreaming feed the self-evolving loop
     when the same recalled material keeps converging across days.
+
+- name: auto-log-sweep
+  interval: 24h
+  prompt: |
+    Run `bash scripts/auto-log-sweep.sh`. The first line is one of
+    `Auto-log-sweep [OK|HEAL|ATTN]`. If `[ATTN]`, alert with the full
+    output (one human-shaped bullet per affected lane). If `[HEAL]`,
+    alert with the full output as FYI. If `[OK]`, reply HEARTBEAT_OK.
+    Codifies the doctrine: the agent reads its own automated outputs
+    (SEPL, nightly, bin-sanity, memory-commit) once per day and surfaces
+    only a human verdict — raw stays in `reports/`. The user should not
+    have to paste cron logs back to find out what broke.
