@@ -26,3 +26,10 @@
 - environment, not model capability: `claude -p` cannot resolve/reach `api.anthropic.com` from this sandbox and cannot write expected state under `/root/.claude`. Converted that diagnosis into [score=0.861 recalls=0 avg=0.620 source=memory/2026-04-23.md:17-19]
 <!-- openclaw-memory-promotion:memory:memory/2026-04-23.md:21:22 -->
 - on preflight with a `__preflight__` row, and added a daily heartbeat check so benchmark availability is visible without manually retrying. [score=0.861 recalls=0 avg=0.620 source=memory/2026-04-23.md:21-22]
+
+## Promoted From Short-Term Memory (2026-05-01)
+
+<!-- openclaw-memory-promotion:memory:memory/2026-04-25.md:1:1 -->
+- 2026-04-25 [score=0.812 recalls=0 avg=0.620 source=memory/2026-04-25.md:1-1]
+<!-- openclaw-memory-promotion:memory:memory/2026-04-21.md:3:5 -->
+- 8-hour autonomous overnight pass (09:17 → 17:17 UTC). Plan at `reports/overnight-plan-2026-04-21.md`. Six commits landed on `master`; H7 is this entry + MEMORY curation; H8 writes the consolidated report. [score=0.808 recalls=0 avg=0.620 source=memory/2026-04-21.md:3-5]
