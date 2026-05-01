@@ -132,6 +132,19 @@ Every tool call is logged to `traces/YYYY-MM-DD.jsonl` via PreToolUse/PostToolUs
 
 When a pattern stands out (token-burn on repeat task, failing class, etc.), surface it to God per `ROADMAP.md`.
 
+### Self-improvement alerts: interpret, don't paste
+
+Cron-driven scripts that send to Telegram must produce a **human-shaped one-liner**, not raw stderr / exit codes / JSON snippets. Raw output goes to `reports/` for the agent; the user gets the verdict and (if relevant) the action choice.
+
+Pattern any new alerting script should follow:
+
+1. Run the underlying check; capture full output to `reports/<source>-<date>.log`.
+2. If it found a problem, **try to self-heal first** (e.g., `bin-autoheal.sh` infers a bin from the tool name and appends to `state/bin-overrides.jsonl`; `sepl-improve-loop.sh` step-0 commits a memory-promotion delta to clear the SEPL dirty-tree refusal).
+3. On heal: notify "self-healed: \<what changed\>" and gate the cron status as success.
+4. On no-heal: notify a one-line human summary that names the choice the user has to make. Never paste the raw `rc=N` / stderr.
+
+Existing emitters wired this way: `scripts/nightly.sh` (bin classifier), `scripts/sepl-improve-loop.sh` (improve.sh exit reasons). Use them as the template when adding new ones.
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**
