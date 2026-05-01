@@ -19,6 +19,8 @@
 #   2. Nightly health check   (reports/nightly-<date>.log,  if present)
 #   3. Bin sanity / autoheal  (reports/bin-sanity-<date>.txt, if present)
 #   4. MEMORY.md commit lane  (memory-promote-commit cron output via reports/)
+#   5. Eval regressions       (reports/eval-notify-<date>.log, silenced 2026-05-01)
+#   6. Weekly pruning digest  (state/pruning-digest.log.jsonl, silenced 2026-05-01)
 #
 # Add new lanes as new automated outputs land in reports/.
 
@@ -97,6 +99,45 @@ if [ -f "$WORKSPACE/MEMORY.md" ]; then
       fi
     fi
   fi
+fi
+
+# ---- Lane 5: Eval regressions (silenced in-script push) ----
+# eval-notify.sh stashes its composed message into reports/eval-notify-<date>.log
+# along with `=== eval-notify <ts> exit=N ===`. Non-zero exit on the most-recent
+# block = an unforwarded regression that the user should know about.
+for d in "$TODAY" "$YDAY"; do
+  log="$REPORTS/eval-notify-$d.log"
+  [ -f "$log" ] || continue
+  last_exit=$(grep -E '^=== eval-notify .* exit=' "$log" | tail -1 | sed -E 's/.*exit=([0-9]+).*/\1/')
+  [ -z "$last_exit" ] && continue
+  if [ "$last_exit" != "0" ]; then
+    # Pull the "Score:" line out of the latest block for context.
+    score_line=$(awk '/^=== eval-notify /{block=""} {block=block"\n"$0} END{print block}' "$log" \
+      | grep -E '^- [0-9]+ failed' | head -1)
+    attn+=("Eval regression $d: ${score_line:-non-zero exit (see $log)}")
+  fi
+done
+
+# ---- Lane 6: Weekly pruning digest (silenced in-script push) ----
+# pruning-digest.sh appends a JSONL line per run; surface today's run if it
+# was silenced with a non-empty candidate list.
+plog="$WORKSPACE/state/pruning-digest.log.jsonl"
+if [ -f "$plog" ]; then
+  for d in "$TODAY" "$YDAY"; do
+    line=$(grep -F "\"ts\":\"$d" "$plog" 2>/dev/null | tail -1)
+    [ -z "$line" ] && continue
+    result=$(printf '%s' "$line" | jq -r '.result // ""')
+    count=$(printf '%s' "$line" | jq -r '.count // 0')
+    total=$(printf '%s' "$line" | jq -r '.total // 0')
+    case "$result" in
+      silenced|sent)
+        [ "$total" -gt 0 ] && attn+=("Pruning digest $d: $total candidate(s) waiting on keep/drop calls — see reports/pruning-digest-$d.log.")
+        ;;
+      error)
+        attn+=("Pruning digest $d: send/log error — see $plog.")
+        ;;
+    esac
+  done
 fi
 
 # ---- Verdict ----

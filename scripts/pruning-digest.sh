@@ -128,6 +128,21 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
+# Silenced 2026-05-01: per-lane pushes are off; auto-log-sweep is the funnel.
+# Always stash the composed message in reports/ so the heartbeat sweep can
+# surface "N pruning candidates this week" without re-running the digest.
+SIDECAR="$WORKSPACE/reports/pruning-digest-$TODAY.log"
+mkdir -p "$(dirname "$SIDECAR")"
+{
+  printf '=== pruning-digest %s shown=%s total=%s ===\n' "$TS" "$SHOWN" "$TOTAL"
+  printf '%s\n' "$MSG"
+} >> "$SIDECAR"
+
+if [ "${OPENCLAW_INSCRIPT_PUSH:-0}" != "1" ]; then
+  log_run "silenced" "$SHOWN" "$TOTAL" "" ""
+  exit 0
+fi
+
 # --- real send via openclaw (same pattern as eval-notify.sh / track2-checkin.sh) ---
 SEND_OUT=$(mktemp)
 SEND_ERR=$(mktemp)

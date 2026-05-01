@@ -119,25 +119,34 @@ if [ "${#MSG}" -gt "$MAX_MSG_CHARS" ]; then
 [truncated; full artifacts on disk]"
 fi
 
-# EVAL_NOTIFY_DRY_RUN bypasses everything (local smoke test).
-if [ "${EVAL_NOTIFY_DRY_RUN:-0}" = "1" ]; then
-  "$OPENCLAW" message send \
-    --channel "$CHANNEL" \
-    --target "$CHAT_TARGET" \
-    --message "$MSG" \
-    --dry-run \
-    < /dev/null \
-    || echo "[eval-notify] dry-run push failed" >&2
-  exit "$EXIT"
-fi
+# Silenced 2026-05-01: per-lane Telegram pushes are off; auto-log-sweep is the
+# single funnel. Compose the same message and stash it in reports/ so the
+# heartbeat sweep can extract a verdict.
+SIDECAR="$WORKSPACE/reports/eval-notify-$(date -u +%F).log"
+mkdir -p "$(dirname "$SIDECAR")"
+{
+  printf '=== eval-notify %s exit=%s ===\n' "$(date -u +%FT%TZ)" "$EXIT"
+  printf '%s\n' "$MSG"
+} >> "$SIDECAR"
 
-# Real alert: route through send-alert for severity + quiet-hours buffering.
-# Eval regressions are "action" — actionable but not wake-the-user urgent.
-ALERT_TARGET="$CHAT_TARGET" ALERT_CHANNEL="$CHANNEL" \
-  bash "$WORKSPACE/scripts/send-alert.sh" \
-    --severity action \
-    --source "eval" \
-    --message "$MSG" \
-  || echo "[eval-notify] send-alert failed; check openclaw gateway / pairing state" >&2
+# Legacy push behind explicit opt-in (off by default).
+if [ "${OPENCLAW_INSCRIPT_PUSH:-0}" = "1" ]; then
+  if [ "${EVAL_NOTIFY_DRY_RUN:-0}" = "1" ]; then
+    "$OPENCLAW" message send \
+      --channel "$CHANNEL" \
+      --target "$CHAT_TARGET" \
+      --message "$MSG" \
+      --dry-run \
+      < /dev/null \
+      || echo "[eval-notify] dry-run push failed" >&2
+  else
+    ALERT_TARGET="$CHAT_TARGET" ALERT_CHANNEL="$CHANNEL" \
+      bash "$WORKSPACE/scripts/send-alert.sh" \
+        --severity action \
+        --source "eval" \
+        --message "$MSG" \
+      || echo "[eval-notify] send-alert failed; check openclaw gateway / pairing state" >&2
+  fi
+fi
 
 exit "$EXIT"

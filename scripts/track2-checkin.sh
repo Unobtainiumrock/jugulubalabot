@@ -214,10 +214,19 @@ if [ "$SHOULD_FIRE" -eq 0 ]; then
   exit 0
 fi
 
-# Track 2 check-in is info-level (status ping, not actionable). Route through
-# send-alert for quiet-hours buffering.
-ALERT_TARGET="$CHAT_TARGET" ALERT_CHANNEL="$CHANNEL" \
-  bash "$WORKSPACE/scripts/send-alert.sh" \
-    --severity info \
-    --source "track2-checkin" \
-    --message "$MSG"
+# Silenced 2026-05-01: per-lane Telegram push is off; auto-log-sweep / on-demand
+# self-read is the path. Always stash the composed message so it's available.
+SIDECAR="$WORKSPACE/reports/track2-checkin-$TODAY.log"
+mkdir -p "$(dirname "$SIDECAR")"
+{
+  printf '=== track2-checkin %s ===\n' "$(date -u +%FT%TZ)"
+  printf '%s\n' "$MSG"
+} >> "$SIDECAR"
+
+if [ "${OPENCLAW_INSCRIPT_PUSH:-0}" = "1" ]; then
+  ALERT_TARGET="$CHAT_TARGET" ALERT_CHANNEL="$CHANNEL" \
+    bash "$WORKSPACE/scripts/send-alert.sh" \
+      --severity info \
+      --source "track2-checkin" \
+      --message "$MSG"
+fi

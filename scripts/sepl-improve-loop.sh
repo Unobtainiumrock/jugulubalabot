@@ -31,8 +31,12 @@ DIGEST_CHANNEL="${SEPL_LOOP_NOTIFY_CHANNEL:-telegram}"
 OPENCLAW="/usr/bin/openclaw"
 
 notify() {
-  if [ "${SEPL_LOOP_NO_NOTIFY:-0}" = "1" ]; then
-    echo "[notify-suppressed] $*"
+  # Silenced 2026-05-01: per-lane Telegram pushes default off; the message
+  # text already lands in reports/sepl-loop-<date>.log via tee in main, so
+  # auto-log-sweep can extract a verdict. Legacy push still available behind
+  # OPENCLAW_INSCRIPT_PUSH=1 (or the older SEPL_LOOP_NO_NOTIFY=0 override).
+  echo "[notify] $*"
+  if [ "${OPENCLAW_INSCRIPT_PUSH:-0}" != "1" ] && [ "${SEPL_LOOP_NO_NOTIFY:-1}" = "1" ]; then
     return 0
   fi
   "$OPENCLAW" message send --channel "$DIGEST_CHANNEL" \

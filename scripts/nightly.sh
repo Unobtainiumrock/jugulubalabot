@@ -72,13 +72,19 @@ Mapped: $HEALED" || true
 
   if [ "$HEAL_EXIT" -eq 0 ] && [ -n "$HEALED" ]; then
     MSG="Bin classifier — self-healed for $YESTERDAY: $HEALED. Future traces classify automatically; no action needed."
-    "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
-      --message "$MSG" < /dev/null || true
+    echo "$MSG" >> "$WORKSPACE/reports/nightly-$(date -u +%F).log"
+    if [ "${OPENCLAW_INSCRIPT_PUSH:-0}" = "1" ]; then
+      "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
+        --message "$MSG" < /dev/null || true
+    fi
     BIN_EXIT=0   # gap closed; don't gate the cron status
   elif [ "$HEAL_EXIT" -ne 0 ]; then
     MSG="Bin classifier — needs your call for $YESTERDAY: $UNHEALED. Pick a bin (file_ground / self_modify / agent_spawn / exec / scheduling / external_fetch / comms / memory_update) and append to state/bin-overrides.jsonl. Raw: reports/bin-sanity-$YESTERDAY.log"
-    "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
-      --message "$MSG" < /dev/null || true
+    echo "$MSG" >> "$WORKSPACE/reports/nightly-$(date -u +%F).log"
+    if [ "${OPENCLAW_INSCRIPT_PUSH:-0}" = "1" ]; then
+      "$OPENCLAW" message send --channel "$CHANNEL" --target "$CHAT_TARGET" \
+        --message "$MSG" < /dev/null || true
+    fi
   fi
 fi
 bump_overall "$BIN_EXIT"
