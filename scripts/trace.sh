@@ -20,17 +20,36 @@ SIDECAR="$SIDECAR_DIR/$KEY"
 
 # Source detection. OPENCLAW_MCP_SESSION_KEY has shape `agent:<id>:<ctx>[:...]`
 # where <ctx> is the canonical session context (cron, subagent, main, telegram,
-# etc.). Heartbeats fire into the main session and are not distinguishable here
-# — they fold into "conversation" for now; narrower detection can iterate.
+# etc.). Heartbeats fire into the main session and would otherwise fold under
+# "conversation"; the override block below promotes them to "heartbeat" via env
+# var or HEARTBEAT.md-exclusive Bash fingerprints, giving Reflect a real
+# denominator for heartbeat-driven activity.
 SOURCE="unknown"
 if [ -n "${OPENCLAW_MCP_SESSION_KEY:-}" ]; then
   CTX=$(printf '%s' "$OPENCLAW_MCP_SESSION_KEY" | awk -F: '{print $3}')
   case "$CTX" in
     cron)                                            SOURCE="cron" ;;
     subagent|acp)                                    SOURCE="subagent" ;;
+    heartbeat)                                       SOURCE="heartbeat" ;;
     main|direct|explicit|telegram|whatsapp|dashboard) SOURCE="conversation" ;;
     "")                                              SOURCE="unknown" ;;
     *)                                               SOURCE="$CTX" ;;
+  esac
+fi
+
+# Heartbeat fingerprint override. The OpenClaw scheduler fires heartbeat
+# tasks into the main session, so OPENCLAW_MCP_SESSION_KEY classifies them
+# as "conversation". Override when (a) the scheduler exposes
+# OPENCLAW_HEARTBEAT_TASK explicitly, or (b) a Bash invocation matches a
+# script that only fires from HEARTBEAT.md tasks. List is hand-curated
+# from `tasks:` blocks in HEARTBEAT.md — keep in sync when adding tasks.
+if [ -n "${OPENCLAW_HEARTBEAT_TASK:-}" ]; then
+  SOURCE="heartbeat"
+elif [ "$SOURCE" = "conversation" ] && [ "$TOOL" = "Bash" ]; then
+  HB_CMD=$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.command // ""' 2>/dev/null || echo "")
+  case "$HB_CMD" in
+    *"reflect-signoff-alert.sh"*|*"budget-peek.sh --risk"*|*"claude-print-health.sh"*|*"dreaming-bridge.sh"*)
+      SOURCE="heartbeat" ;;
   esac
 fi
 

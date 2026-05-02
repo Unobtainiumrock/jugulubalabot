@@ -74,6 +74,38 @@ if [ -x "$shape_guard" ]; then
   raw=("${filtered[@]}")
 fi
 
+# Compute fixture-redness streak map: for each fixture, count consecutive
+# FAIL runs from the newest summary.tsv backward, stopping at the first
+# PASS. Walks at most last 14 runs. Output is `<fixture>\t<streak>` per
+# line; absent → no streak. Drives the `red` scoring component below so
+# Select prefers candidates aimed at long-failing fixtures over freshly
+# red ones (e.g., `one-shot-cron-recognition` 13d > `layer-confusion` 1d).
+redness_map="$(mktemp)"
+runs=()
+while IFS= read -r d; do
+  [ -f "$d/summary.tsv" ] || continue
+  runs+=("$d/summary.tsv")
+done < <(ls -1dr "$WORKSPACE/evals/runs/"*/ 2>/dev/null | head -14)
+if [ "${#runs[@]}" -gt 0 ]; then
+  awk '
+    FNR==1 { next }
+    {
+      fix=$1; res=$2
+      if (!(fix in seen)) { seen[fix]=1 }
+      hist[fix] = hist[fix] (res == "FAIL" ? "F" : "P")
+    }
+    END {
+      for (f in seen) {
+        h = hist[f]; streak = 0
+        for (j=1; j<=length(h); j++) {
+          if (substr(h, j, 1) == "F") streak++; else break
+        }
+        if (streak > 0) print f "\t" streak
+      }
+    }
+  ' "${runs[@]}" > "$redness_map"
+fi
+
 # Cheap scoring heuristics. Each candidate gets:
 #   reversibility   — high if it touches scripts/hooks/evals (revertable);
 #                     low if it edits memory/SOUL/AGENTS (rule changes).
@@ -82,9 +114,17 @@ fi
 #   token_burn      — high if mentions a number×count pattern ("3×/day",
 #                     "Nx", "8/day") or names a deterministic-conversion target.
 #   risk            — bumped up if mentions auto-merge, master, force, delete.
+#   redness         — sum of consecutive-fail streaks for fixtures named in
+#                     body, capped at 14. Long-red beats fresh-red so we stop
+#                     orbiting yesterday's regression and chase the actually-
+#                     stuck fixtures.
+#   noop            — flag for self-referential placeholder candidates
+#                     ("no-op hypothesis", "logging the no-op", "re-run
+#                     tomorrow"). Penalized so the green-day stub doesn't
+#                     keep winning against real candidates on quiet days.
 score_one() {
   local body="$1"
-  local rev=2 cov=2 burn=1 risk=0
+  local rev=2 cov=2 burn=1 risk=0 red=0 noop=0
   # reversibility
   echo "$body" | grep -qiE '(scripts/|hooks/|evals/|fixture)' && rev=3
   echo "$body" | grep -qiE '(SOUL\.md|AGENTS\.md|MEMORY\.md|memory/|USER\.md)' && rev=1
@@ -97,9 +137,23 @@ score_one() {
   # risk modifiers
   echo "$body" | grep -qiE '(auto.?merge|force.?push|rm.?-rf|delete[[:space:]]+[a-z]+\.md|drop[[:space:]]+table)' && risk=2
   echo "$body" | grep -qiE '(audit|measure|count|read.only|dry.run)' && risk=$((risk - 1))
-  # composite. weight: burn x2, cov x2, rev x1, then subtract risk.
-  local total=$(( burn * 2 + cov * 2 + rev - risk ))
-  printf "%d\t%d\t%d\t%d\t%d\n" "$total" "$burn" "$cov" "$rev" "$risk"
+  # redness: sum streaks for any fixture named in body. Word-boundary match
+  # so `layer-confusion` doesn't accidentally pull `non-layer-confusion`.
+  if [ -s "$redness_map" ]; then
+    while IFS=$'\t' read -r fix streak; do
+      [ -n "$fix" ] || continue
+      if echo "$body" | grep -qE "\\b${fix}\\b"; then
+        red=$((red + streak))
+      fi
+    done < "$redness_map"
+    [ "$red" -gt 14 ] && red=14
+  fi
+  # noop demotion
+  echo "$body" | grep -qiE '(no.?op hypothesis|no change selected|placeholder|logging the no.op|re-run.*tomorrow)' && noop=1
+  # composite. weight: red x3 (heaviest — chase oldest pain), burn x2, cov x2,
+  # rev x1; subtract risk + noop x5 (effectively excludes noop placeholders).
+  local total=$(( red * 3 + burn * 2 + cov * 2 + rev - risk - noop * 5 ))
+  printf "%d\t%d\t%d\t%d\t%d\t%d\t%d\n" "$total" "$burn" "$cov" "$rev" "$risk" "$red" "$noop"
 }
 
 slugify() {
@@ -112,7 +166,7 @@ slugify() {
 # Score every candidate, sort desc, take top N.
 N="${SELECT_N:-3}"
 tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "$tmp" "$redness_map"' EXIT
 i=0
 for body in "${raw[@]}"; do
   scores=$(score_one "$body")
@@ -133,21 +187,21 @@ done
   echo
   echo "## Ranked candidates"
   echo
-  echo "| Rank | ID | Score | burn | cov | rev | risk | Title |"
-  echo "|------|----|-------|------|-----|-----|------|-------|"
+  echo "| Rank | ID | Score | burn | cov | rev | risk | red | noop | Title |"
+  echo "|------|----|-------|------|-----|-----|------|-----|------|-------|"
   rank=0
-  while IFS=$'\t' read -r total idx slug burn cov rev risk body; do
+  while IFS=$'\t' read -r total idx slug burn cov rev risk red noop body; do
     rank=$((rank + 1))
     [ "$rank" -gt "$N" ] && break
     title=$(echo "$body" | cut -c1-80 | tr -d '|')
-    printf "| %d | %s | %d | %d | %d | %d | %d | %s |\n" \
-      "$rank" "$slug" "$total" "$burn" "$cov" "$rev" "$risk" "$title"
+    printf "| %d | %s | %d | %d | %d | %d | %d | %d | %d | %s |\n" \
+      "$rank" "$slug" "$total" "$burn" "$cov" "$rev" "$risk" "$red" "$noop" "$title"
   done < <(sort -k1,1 -nr "$tmp")
   echo
   echo "## Candidate detail"
   echo
   rank=0
-  while IFS=$'\t' read -r total idx slug burn cov rev risk body; do
+  while IFS=$'\t' read -r total idx slug burn cov rev risk red noop body; do
     rank=$((rank + 1))
     [ "$rank" -gt "$N" ] && break
     echo "### $rank. \`$slug\`  (score=$total)"
@@ -156,7 +210,7 @@ done
     echo
     echo "> $body"
     echo
-    echo "- token_burn=$burn, eval_coverage=$cov, reversibility=$rev, risk=$risk"
+    echo "- token_burn=$burn, eval_coverage=$cov, reversibility=$rev, risk=$risk, redness=$red, noop=$noop"
     echo "- next: \`scripts/improve.sh $(basename "$0" .sh | sed 's/^select/select/')-$TODAY $slug\`"
     echo
   done < <(sort -k1,1 -nr "$tmp")

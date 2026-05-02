@@ -135,6 +135,83 @@ fi
 baseline_fail_count=$(wc -l < "$baseline_cache" | tr -d ' ')
 echo "improve: baseline on master ${master_sha:0:7} — ${baseline_fail_count} failing fixtures"
 
+# Extract target fixtures from candidate body (any evals/fixtures/*.json
+# basename mentioned with word boundaries). Used for prior-rollback
+# overlap matching so a previous attempt that broke X surfaces when a
+# new candidate also targets X.
+extract_targets() {
+  local body="$1"
+  local f name
+  for f in "$WORKSPACE/evals/fixtures"/*.json; do
+    [ -f "$f" ] || continue
+    name=$(basename "$f" .json)
+    if echo "$body" | grep -qE "\\b${name}\\b"; then
+      echo "$name"
+    fi
+  done
+}
+current_targets=$(extract_targets "$candidate_body" | sort -u)
+
+# Build "PRIOR FAILED ATTEMPTS" block from past rollback metadata. Match
+# is OR: same slug, OR overlapping target fixtures. Most-recent first,
+# capped at 3, diff truncated to 200 lines each. The point is to feed
+# the subagent the exact patch-shapes that lost so it doesn't redraw the
+# same losing edit a third time. Closes the regression-mode learning
+# gap: each rollback was previously logged-and-forgotten.
+prior_block=""
+prior_count=0
+if compgen -G "$REPORTS/improve-rollback-*.meta.json" > /dev/null; then
+  while IFS= read -r meta; do
+    [ -f "$meta" ] || continue
+    meta_slug=$(jq -r '.slug // ""' "$meta" 2>/dev/null)
+    overlap=0
+    if [ "$meta_slug" = "$slug" ]; then
+      overlap=1
+    elif [ -n "$current_targets" ]; then
+      while IFS= read -r t; do
+        [ -n "$t" ] || continue
+        if jq -e --arg t "$t" '.target_fixtures // [] | index($t)' "$meta" >/dev/null 2>&1; then
+          overlap=1; break
+        fi
+      done <<< "$current_targets"
+    fi
+    if [ "$overlap" -eq 1 ]; then
+      prior_count=$((prior_count + 1))
+      [ "$prior_count" -gt 3 ] && break
+      diff_path=${meta%.meta.json}.diff
+      regs=$(jq -r '.regressions // ""' "$meta" 2>/dev/null)
+      prior_date=$(jq -r '.date // ""' "$meta" 2>/dev/null)
+      prior_slug=$(jq -r '.slug // ""' "$meta" 2>/dev/null)
+      diff_excerpt=""
+      if [ -f "$diff_path" ]; then
+        diff_excerpt=$(head -200 "$diff_path")
+      fi
+      prior_block="$prior_block
+[$prior_date] slug=$prior_slug regressions=$regs
+diff (≤200 lines):
+\`\`\`diff
+$diff_excerpt
+\`\`\`
+"
+    fi
+  done < <(ls -t "$REPORTS"/improve-rollback-*.meta.json 2>/dev/null)
+fi
+
+prior_section=""
+if [ "$prior_count" -gt 0 ]; then
+  prior_section=$(cat <<PRIOR_BLOCK_END
+
+PRIOR FAILED ATTEMPTS ON OVERLAPPING TARGETS ($prior_count attempt(s)):
+The orchestrator already tried similar edits and rolled them back because
+they regressed other fixtures. Read these patches and DO NOT repeat the
+same shape. If a wording change failed before, the substantive change
+needed is structural — actual rule, actual contract, actual behavior —
+not another phrasing of the same advice.
+$prior_block
+PRIOR_BLOCK_END
+)
+fi
+
 # Spawn the subagent. Brief is the candidate body + workspace conventions
 # pointer. Subagent runs with bypassPermissions so it can edit files freely;
 # eval gate is the safety net.
@@ -144,7 +221,7 @@ You are on branch $branch (forked from master).
 
 CANDIDATE TO IMPLEMENT:
 $candidate_body
-
+$prior_section
 GUARDRAILS:
 - Make the smallest change that satisfies the candidate.
 - If the candidate is an "audit" task, the deliverable is a report file under reports/ — keep it short and factual.
@@ -226,9 +303,29 @@ rm -f "$branch_fails_file"
 if [ "$reg_count" -gt 0 ]; then
   reg_csv=$(printf '%s' "$regressions" | tr '\n' ',' | sed 's/,$//')
   echo "improve: $reg_count regression(s) vs master ${master_sha:0:7}: $reg_csv — rolling back"
+  # Capture the patch + metadata BEFORE deleting the branch so the next
+  # Improve attempt on this slug (or an overlapping target) can replay it
+  # in the brief and avoid the same shape. Keyed by date+slug; if the same
+  # slug rolls back twice in a day, the second writeover is intentional —
+  # latest-fail is the most relevant teaching example.
+  rollback_diff="$REPORTS/improve-rollback-${TODAY}-${slug}.diff"
+  rollback_meta="$REPORTS/improve-rollback-${TODAY}-${slug}.meta.json"
+  git diff master.."$branch" > "$rollback_diff" 2>/dev/null || true
+  targets_json=$(printf '%s\n' "${current_targets:-}" | jq -R . | jq -s 'map(select(. != ""))' 2>/dev/null || echo '[]')
+  jq -n \
+    --arg date "$TODAY" \
+    --arg ts "$NOW_TS" \
+    --arg slug "$slug" \
+    --arg candidate "$candidate_body" \
+    --arg regressions "$reg_csv" \
+    --arg branch "$branch" \
+    --arg diff "$rollback_diff" \
+    --argjson targets "$targets_json" \
+    '{date:$date, ts:$ts, slug:$slug, candidate:$candidate, regressions:$regressions, branch:$branch, diff_path:$diff, target_fixtures:$targets}' \
+    > "$rollback_meta"
   git checkout -q master
   git branch -q -D "$branch"
-  log_attempt "rollback_regression" "regressions=$reg_csv improvements=$imp_count log=$eval_log"
+  log_attempt "rollback_regression" "regressions=$reg_csv improvements=$imp_count log=$eval_log diff=$rollback_diff"
   exit 1
 fi
 
