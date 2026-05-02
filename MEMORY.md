@@ -33,3 +33,8 @@
 - 2026-04-25 [score=0.812 recalls=0 avg=0.620 source=memory/2026-04-25.md:1-1]
 <!-- openclaw-memory-promotion:memory:memory/2026-04-21.md:3:5 -->
 - 8-hour autonomous overnight pass (09:17 → 17:17 UTC). Plan at `reports/overnight-plan-2026-04-21.md`. Six commits landed on `master`; H7 is this entry + MEMORY curation; H8 writes the consolidated report. [score=0.808 recalls=0 avg=0.620 source=memory/2026-04-21.md:3-5]
+
+## Promoted From Short-Term Memory (2026-05-02)
+
+<!-- openclaw-memory-promotion:memory:memory/2026-04-26.md:1:1 -->
+- 2026-04-26 [score=0.812 recalls=0 avg=0.620 source=memory/2026-04-26.md:1-1]
