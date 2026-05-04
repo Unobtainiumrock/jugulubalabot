@@ -43,3 +43,8 @@
 
 <!-- openclaw-memory-promotion:memory:memory/2026-04-28.md:3:5 -->
 - 2026-04-28 [score=0.805 recalls=0 avg=0.620 source=memory/2026-04-28.md:1-2]
+
+## Promoted From Short-Term Memory (2026-05-04)
+
+<!-- openclaw-memory-promotion:memory:memory/2026-04-28.md:1:1 -->
+- 2026-04-28 [score=0.812 recalls=0 avg=0.620 source=memory/2026-04-28.md:1-1]
