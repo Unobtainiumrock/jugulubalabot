@@ -9,9 +9,11 @@
 #   scripts/improve.sh select-2026-04-23 audit-state-guard-log-jsonl-for-bypass-rate-if-ope
 #
 # Env knobs:
-#   IMPROVE_DRY_RUN=1   — don't spawn subagent, just print the brief
-#   IMPROVE_NO_MERGE=1  — never merge even on green (leave branch for review)
-#   IMPROVE_TIMEOUT=600 — subagent timeout in seconds (default 600)
+#   IMPROVE_DRY_RUN=1        — don't spawn subagent, just print the brief
+#   IMPROVE_NO_MERGE=1       — never merge even on green (leave branch for review)
+#   IMPROVE_TIMEOUT=600      — subagent timeout in seconds (default 600)
+#   IMPROVE_CONSENSUS_N=2    — re-run regressed fixtures once; treat PASS-on-rerun
+#                              as flake (default 2). Set to 1 to disable.
 #
 # Exit: 0 merged, 1 rolled-back, 2 left-open (no-merge mode), 3 input error.
 set -uo pipefail
@@ -300,9 +302,50 @@ reg_count=$(printf '%s\n' "$regressions" | grep -c . || true)
 imp_count=$(printf '%s\n' "$improvements" | grep -c . || true)
 rm -f "$branch_fails_file"
 
+# N=2 consensus: re-run just the regressed fixtures once. Any fixture that
+# flips back to PASS on the re-run is reclassified as flake and dropped from
+# the regression set. Closes the 2026-05-04 failure mode where 4 substantively
+# correct patches rolled back on LLM-judge variance in unrelated fixtures.
+flake_count=0
+flake_csv=""
+consensus_n="${IMPROVE_CONSENSUS_N:-2}"
+if [ "$reg_count" -gt 0 ] && [ "$consensus_n" -ge 2 ]; then
+  reg_filter=$(printf '%s' "$regressions" | tr '\n' ',' | sed 's/,$//')
+  echo "improve: $reg_count first-run regression(s): $reg_filter — re-running for N=$consensus_n consensus"
+  consensus_log="$REPORTS/improve-${TODAY}-${slug}.consensus.log"
+  FIXTURES="$reg_filter" bash "$WORKSPACE/evals/run.sh" > "$consensus_log" 2>&1 || true
+  consensus_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$consensus_log")
+  if [ -n "$consensus_run_dir" ] && [ -f "$consensus_run_dir/summary.tsv" ]; then
+    consensus_fails_file=$(mktemp)
+    awk -F'\t' 'NR>1 && $2=="FAIL"{print $1}' "$consensus_run_dir/summary.tsv" \
+      | sort -u > "$consensus_fails_file"
+    confirmed_file=$(mktemp)
+    flakes_file=$(mktemp)
+    while IFS= read -r r; do
+      [ -n "$r" ] || continue
+      if grep -qx -- "$r" "$consensus_fails_file"; then
+        printf '%s\n' "$r" >> "$confirmed_file"
+      else
+        printf '%s\n' "$r" >> "$flakes_file"
+      fi
+    done <<< "$regressions"
+    flake_count=$(wc -l < "$flakes_file" | tr -d ' ')
+    confirmed_count=$(wc -l < "$confirmed_file" | tr -d ' ')
+    if [ "$flake_count" -gt 0 ]; then
+      flake_csv=$(tr '\n' ',' < "$flakes_file" | sed 's/,$//')
+      echo "improve: consensus reclassified $flake_count fixture(s) as flake (PASS on re-run): $flake_csv"
+    fi
+    regressions=$(cat "$confirmed_file")
+    reg_count=$confirmed_count
+    rm -f "$consensus_fails_file" "$confirmed_file" "$flakes_file"
+  else
+    echo "improve: consensus re-run produced no summary; preserving original regression set"
+  fi
+fi
+
 if [ "$reg_count" -gt 0 ]; then
   reg_csv=$(printf '%s' "$regressions" | tr '\n' ',' | sed 's/,$//')
-  echo "improve: $reg_count regression(s) vs master ${master_sha:0:7}: $reg_csv — rolling back"
+  echo "improve: $reg_count confirmed regression(s) vs master ${master_sha:0:7}: $reg_csv — rolling back"
   # Capture the patch + metadata BEFORE deleting the branch so the next
   # Improve attempt on this slug (or an overlapping target) can replay it
   # in the brief and avoid the same shape. Keyed by date+slug; if the same
@@ -318,18 +361,24 @@ if [ "$reg_count" -gt 0 ]; then
     --arg slug "$slug" \
     --arg candidate "$candidate_body" \
     --arg regressions "$reg_csv" \
+    --arg flakes "$flake_csv" \
+    --argjson flake_count "$flake_count" \
     --arg branch "$branch" \
     --arg diff "$rollback_diff" \
     --argjson targets "$targets_json" \
-    '{date:$date, ts:$ts, slug:$slug, candidate:$candidate, regressions:$regressions, branch:$branch, diff_path:$diff, target_fixtures:$targets}' \
+    '{date:$date, ts:$ts, slug:$slug, candidate:$candidate, regressions:$regressions, flakes:$flakes, flake_count:$flake_count, branch:$branch, diff_path:$diff, target_fixtures:$targets}' \
     > "$rollback_meta"
   git checkout -q master
   git branch -q -D "$branch"
-  log_attempt "rollback_regression" "regressions=$reg_csv improvements=$imp_count log=$eval_log diff=$rollback_diff"
+  log_attempt "rollback_regression" "regressions=$reg_csv flakes=$flake_csv improvements=$imp_count log=$eval_log diff=$rollback_diff"
   exit 1
 fi
 
-echo "improve: no regressions vs master ${master_sha:0:7} (improvements=$imp_count)"
+if [ "$flake_count" -gt 0 ]; then
+  echo "improve: no confirmed regressions vs master ${master_sha:0:7} (improvements=$imp_count, flakes_dropped=$flake_count: $flake_csv)"
+else
+  echo "improve: no regressions vs master ${master_sha:0:7} (improvements=$imp_count)"
+fi
 
 if [ "${IMPROVE_NO_MERGE:-0}" = "1" ]; then
   echo "improve: gate green; IMPROVE_NO_MERGE=1, leaving branch $branch for review"
@@ -341,12 +390,16 @@ fi
 # Merge to master. Use --no-ff so the SEPL merge is auditable in log.
 echo "improve: gate green (delta vs master), merging $branch -> master"
 git checkout -q master
+flake_line=""
+if [ "$flake_count" -gt 0 ]; then
+  flake_line=$'\n'"Flakes reclassified by N=$consensus_n consensus: $flake_count ($flake_csv)"
+fi
 git merge --no-ff -q -m "sepl/merge: $slug
 
 Improve candidate from $select_id passed delta-vs-master gate, merging.
 Branch: $branch
 Master baseline sha: ${master_sha:0:7} (${baseline_fail_count} failing fixtures)
-Improvements vs baseline: ${imp_count}
+Improvements vs baseline: ${imp_count}${flake_line}
 Eval log: $eval_log" \
   "$branch"
 merge_exit=$?
@@ -361,5 +414,5 @@ fi
 # Cleanup branch (kept in reflog if needed). Master post-commit hook handles push.
 git branch -q -d "$branch"
 echo "improve: merged $branch into master (post-commit hook will push)"
-log_attempt "merged" "master sha=$(git rev-parse --short master) improvements=$imp_count"
+log_attempt "merged" "master sha=$(git rev-parse --short master) improvements=$imp_count flakes=$flake_count flake_csv=$flake_csv"
 exit 0
