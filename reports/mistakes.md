@@ -20,6 +20,24 @@ failure modes across time.
 
 ---
 
+## 2026-05-04
+
+### 07:02 — Took an "aggressively loop" instruction in-line and got watchdog-killed
+
+**What I believed:** That God's "do whatever it takes — aggressively loop until we are at stable fixes" meant the parent turn should immediately start driving the 7 failing eval fixtures down to green, running tool calls back to back until done.
+
+**Evidence I had:** The standing memory `feedback_loop_subagent_pattern.md` ("Delegate loop-until-working to a background subagent — objective + ranked paths + guardrails + report-back format; run_in_background=true"). Also `feedback_loop_until_working.md` says iterate until it works — but the *delegate* memory specifically governs how. I had both and reached for the wrong one.
+
+**What was actually true:** The OpenClaw CLI backend has a 600s no-output watchdog (`/tmp/openclaw/openclaw-2026-04-24.log:1660` — `cli watchdog timeout: noOutputTimeoutMs=600000 pid=3067273`). A long parent turn with many tool calls and no streamed text update looks identical to a hang. At 07:02:37 my session was terminated; the codex fallback then hit quota (`Quota exceeded`); the user surface emitted "Embedded agent failed before reply" and the recovery instruction was `/new`. Six minutes of silent execution erased the entire turn.
+
+**Why wrong:** Hierarchy slip. "Loop-until-working" was the verb, but the *substrate* memory ("delegate to background subagent") was the operating instruction. I treated the substrate rule as advice instead of a hard pre-condition. Also: I had no model of the 600s watchdog and no rule that names it, so the failure mode was invisible to my planning.
+
+**Durable fix:** SOUL.md Meta-rule added — *"Aggressive-loop requests go to a background subagent, not the parent turn"* — names the 600s watchdog as the concrete reason and pins the trigger phrases. Mistake-loop-close heartbeat will see this entry has a `Fix:` line on first scan.
+
+**Fix:** SOUL.md Meta-rule (this commit); subagent dispatched in the same turn for the 7 failing fixtures.
+
+---
+
 ## 2026-04-23
 
 ### 19:20 — Asked for pasted artifacts before checking the artifact path
