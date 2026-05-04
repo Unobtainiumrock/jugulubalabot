@@ -14,6 +14,9 @@
 #   IMPROVE_TIMEOUT=600      — subagent timeout in seconds (default 600)
 #   IMPROVE_CONSENSUS_N=2    — re-run regressed fixtures once; treat PASS-on-rerun
 #                              as flake (default 2). Set to 1 to disable.
+#   IMPROVE_QUARANTINE=a,b   — comma-separated fixture names to drop from the
+#                              regression set (still logged, never gate). Use for
+#                              fixtures sitting on the judge's decision boundary.
 #
 # Exit: 0 merged, 1 rolled-back, 2 left-open (no-merge mode), 3 input error.
 set -uo pipefail
@@ -343,6 +346,35 @@ if [ "$reg_count" -gt 0 ] && [ "$consensus_n" -ge 2 ]; then
   fi
 fi
 
+# Quarantine: drop fixtures listed in IMPROVE_QUARANTINE from the regression
+# set after consensus. They are still logged (so we don't lose evidence) but
+# don't gate. Codifies the 2026-05-04 finding that token-burn-proposal sits
+# on the judge's decision boundary on master 01c5d50, torpedoing every
+# substantively-correct sharpening attempt.
+quarantine_count=0
+quarantine_dropped_csv=""
+quarantine_list="${IMPROVE_QUARANTINE:-}"
+if [ "$reg_count" -gt 0 ] && [ -n "$quarantine_list" ]; then
+  q_kept_file=$(mktemp)
+  q_dropped_file=$(mktemp)
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    if [[ ",$quarantine_list," == *",$r,"* ]]; then
+      printf '%s\n' "$r" >> "$q_dropped_file"
+    else
+      printf '%s\n' "$r" >> "$q_kept_file"
+    fi
+  done <<< "$regressions"
+  quarantine_count=$(wc -l < "$q_dropped_file" | tr -d ' ')
+  if [ "$quarantine_count" -gt 0 ]; then
+    quarantine_dropped_csv=$(tr '\n' ',' < "$q_dropped_file" | sed 's/,$//')
+    echo "improve: quarantine dropped $quarantine_count regression(s): $quarantine_dropped_csv"
+    regressions=$(cat "$q_kept_file")
+    reg_count=$(wc -l < "$q_kept_file" | tr -d ' ')
+  fi
+  rm -f "$q_kept_file" "$q_dropped_file"
+fi
+
 if [ "$reg_count" -gt 0 ]; then
   reg_csv=$(printf '%s' "$regressions" | tr '\n' ',' | sed 's/,$//')
   echo "improve: $reg_count confirmed regression(s) vs master ${master_sha:0:7}: $reg_csv — rolling back"
@@ -374,11 +406,10 @@ if [ "$reg_count" -gt 0 ]; then
   exit 1
 fi
 
-if [ "$flake_count" -gt 0 ]; then
-  echo "improve: no confirmed regressions vs master ${master_sha:0:7} (improvements=$imp_count, flakes_dropped=$flake_count: $flake_csv)"
-else
-  echo "improve: no regressions vs master ${master_sha:0:7} (improvements=$imp_count)"
-fi
+summary_extra=""
+[ "$flake_count" -gt 0 ] && summary_extra="$summary_extra, flakes_dropped=$flake_count: $flake_csv"
+[ "$quarantine_count" -gt 0 ] && summary_extra="$summary_extra, quarantine_dropped=$quarantine_count: $quarantine_dropped_csv"
+echo "improve: no confirmed regressions vs master ${master_sha:0:7} (improvements=$imp_count$summary_extra)"
 
 if [ "${IMPROVE_NO_MERGE:-0}" = "1" ]; then
   echo "improve: gate green; IMPROVE_NO_MERGE=1, leaving branch $branch for review"
@@ -394,12 +425,16 @@ flake_line=""
 if [ "$flake_count" -gt 0 ]; then
   flake_line=$'\n'"Flakes reclassified by N=$consensus_n consensus: $flake_count ($flake_csv)"
 fi
+quarantine_line=""
+if [ "$quarantine_count" -gt 0 ]; then
+  quarantine_line=$'\n'"Quarantine-dropped (IMPROVE_QUARANTINE): $quarantine_count ($quarantine_dropped_csv)"
+fi
 git merge --no-ff -q -m "sepl/merge: $slug
 
 Improve candidate from $select_id passed delta-vs-master gate, merging.
 Branch: $branch
 Master baseline sha: ${master_sha:0:7} (${baseline_fail_count} failing fixtures)
-Improvements vs baseline: ${imp_count}${flake_line}
+Improvements vs baseline: ${imp_count}${flake_line}${quarantine_line}
 Eval log: $eval_log" \
   "$branch"
 merge_exit=$?
@@ -414,5 +449,5 @@ fi
 # Cleanup branch (kept in reflog if needed). Master post-commit hook handles push.
 git branch -q -d "$branch"
 echo "improve: merged $branch into master (post-commit hook will push)"
-log_attempt "merged" "master sha=$(git rev-parse --short master) improvements=$imp_count flakes=$flake_count flake_csv=$flake_csv"
+log_attempt "merged" "master sha=$(git rev-parse --short master) improvements=$imp_count flakes=$flake_count flake_csv=$flake_csv quarantine_count=$quarantine_count quarantine_csv=$quarantine_dropped_csv"
 exit 0
