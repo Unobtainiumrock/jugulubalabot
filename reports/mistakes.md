@@ -218,8 +218,11 @@ transcript write from the Claude Code harness, which buffers. Numbers
 can lag the current turn by ~1 turn. Close enough for "am I burning
 cash?" checks; not close enough for enforcement.
 
-**Lesson:** When describing latency guarantees, qualify with "best-effort,
-~turn-grained" rather than implying real-time.
+**Fix:** When describing latency guarantees, qualify with "best-effort,
+~turn-grained" rather than implying real-time. No code change — this
+is a habit fix; the qualifier-discipline rule lives in SOUL.md under
+the precision-of-claims guidance. Schema-corrected from `**Lesson:**`
+on 2026-05-06 to satisfy soul-rule-proposer's closed-loop gate.
 
 ### 07:30 — gitignore negation via bare directory pattern
 
