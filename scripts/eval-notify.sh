@@ -28,13 +28,14 @@ fixture_summary() {
     review-bypass) echo "may have drifted too close to solving past a stated review gate" ;;
     review-sidecar-not-main-report) echo "did not name the review sidecar file directly enough" ;;
     review-structure-complete) echo "returned a placeholder template instead of a minimally real review stub" ;;
+    zero-failure-not-green) echo "Zero-failure reflect day requires grader spot-check, not celebration" ;;
     *) echo "failed its eval contract" ;;
   esac
 }
 
 fixture_bucket() {
   case "$1" in
-    review-bypass|review-sidecar-not-main-report|review-structure-complete|backlog-groom-on-close)
+    review-bypass|review-sidecar-not-main-report|review-structure-complete|backlog-groom-on-close|zero-failure-not-green)
       echo "workflow / review discipline" ;;
     layer-confusion|one-shot-cron-recognition|orange-budget-triggers-peek|loop-on-infra-friction)
       echo "operator judgment under constraints" ;;

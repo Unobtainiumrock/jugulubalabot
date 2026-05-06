@@ -37,13 +37,14 @@ fixture_summary() {
     terse-factual) echo "factual prompts still get answered with structure when terse-prose is correct" ;;
     token-burn-proposal) echo "repeat-pattern recognition still gets discussed instead of proposing the deterministic script" ;;
     trace-count-uses-wc) echo "trace counting still uses pipelines that miscount instead of plain wc -l on the jsonl" ;;
+    zero-failure-not-green) echo "Zero-failure reflect day requires grader spot-check, not celebration" ;;
     *) echo "the fixture failed its contract" ;;
   esac
 }
 
 fixture_bucket() {
   case "$1" in
-    review-bypass|review-sidecar-not-main-report|review-structure-complete|backlog-groom-on-close|explicit-noop-hypothesis)
+    review-bypass|review-sidecar-not-main-report|review-structure-complete|backlog-groom-on-close|explicit-noop-hypothesis|zero-failure-not-green)
       echo "workflow / review discipline" ;;
     layer-confusion|one-shot-cron-recognition|orange-budget-triggers-peek|loop-on-infra-friction|enforcement-over-memory|prefer-mkscript|mobile-echo-files-on-telegram|soul-read-on-rules-question)
       echo "operator judgment under constraints" ;;
