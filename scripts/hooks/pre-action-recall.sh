@@ -16,8 +16,16 @@
 # repetitive nagging.
 #
 # Kill switches:
-#   - state/.recall-off            session-wide bypass
-#   - OPENCLAW_RECALL_OFF=1 <cmd>  per-call bypass (Bash only)
+#   - state/.recall-off            session-wide bypass (skips everything)
+#   - state/.recall-enforce-off    skips the deny step only; surface still fires
+#   - OPENCLAW_RECALL_OFF=1 <cmd>  per-call bypass (Bash only, full skip)
+#   - OPENCLAW_RECALL_ENFORCE_OFF=1 <cmd>  per-call bypass of deny step only
+#
+# Deny allowlist (escalates from additionalContext to permissionDecision:"deny"):
+#   - workspace_commit_no_ask: tool=Bash AND command~"^git commit" AND
+#     cwd inside workspace. Source: feedback_no_ask_workspace_commits.
+#     Forces the rule into the model's hands instead of relying on it
+#     reading the surface message.
 #
 # Budget: <50ms target. Always exit 0.
 
@@ -30,15 +38,40 @@ LOG="$WORKSPACE/state/recall-log.jsonl"
 # Fail-safe: any error path -> emit empty + exit 0 (silent allow).
 trap 'echo "{}"; exit 0' ERR
 
-# Session bypass
+# Session bypass (full)
 [ -f "$WORKSPACE/state/.recall-off" ] && { echo "{}"; exit 0; }
-
-# Index missing or empty -> nothing to recall
-[ ! -s "$INDEX" ] && { echo "{}"; exit 0; }
 
 INPUT=$(cat)
 TOOL=$(jq -r '.tool_name // ""' <<< "$INPUT" 2>/dev/null)
 [ -z "$TOOL" ] && { echo "{}"; exit 0; }
+CWD=$(jq -r '.cwd // ""' <<< "$INPUT" 2>/dev/null)
+
+# ---- DENY allowlist (runs before surface walk) -------------------------
+# Skipped entirely if state/.recall-enforce-off exists.
+if [ ! -f "$WORKSPACE/state/.recall-enforce-off" ]; then
+  # Rule: workspace_commit_no_ask
+  if [ "$TOOL" = "Bash" ]; then
+    CMD=$(jq -r '.tool_input.command // ""' <<< "$INPUT" 2>/dev/null)
+    if [[ "$CMD" != *"OPENCLAW_RECALL_ENFORCE_OFF=1"* ]] \
+       && [[ "$CMD" != *"OPENCLAW_RECALL_OFF=1"* ]]; then
+      case "$CWD" in
+        "$WORKSPACE"|"$WORKSPACE"/*)
+          if [[ "$CMD" =~ ^[[:space:]]*git[[:space:]]+commit([[:space:]]|$) ]]; then
+            REASON="workspace_commit_no_ask — workspace commits are pre-approved (feedback_no_ask_workspace_commits). If you asked the user before this commit, that IS the regression: the recall surfaced the rule and you gated anyway. To proceed, prefix the command with OPENCLAW_RECALL_ENFORCE_OFF=1 (per-call) or touch state/.recall-enforce-off (session-wide). The override prefix is the proof you read this message."
+            TS=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+            printf '{"ts":"%s","tool":"Bash","kind":"deny","source":"workspace_commit_no_ask","rule":%s}\n' \
+              "$TS" "$(jq -Rc . <<< "$REASON")" >> "$LOG" 2>/dev/null || true
+            jq -n --arg r "$REASON" '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": $r}}'
+            exit 0
+          fi
+          ;;
+      esac
+    fi
+  fi
+fi
+
+# Index missing or empty -> nothing to recall (surface phase)
+[ ! -s "$INDEX" ] && { echo "{}"; exit 0; }
 
 # Skip read-only / low-risk tools to reduce noise
 case "$TOOL" in
