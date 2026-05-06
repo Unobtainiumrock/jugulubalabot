@@ -15,7 +15,9 @@ HOOK_DIR="$(git rev-parse --git-common-dir)/hooks"
 mkdir -p "$HOOK_DIR"
 
 write_hook() {
-  local name="$1" body="$2" path="$HOOK_DIR/$name"
+  local name="$1"
+  local body="$2"
+  local path="$HOOK_DIR/$name"
   if [ -f "$path" ] && [ "$(cat "$path")" = "$body" ]; then
     printf '  hook %-12s already up to date\n' "$name"
     return
