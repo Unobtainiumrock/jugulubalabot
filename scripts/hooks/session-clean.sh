@@ -119,6 +119,11 @@ fi
 # 4. Reset budget-alert state
 [ "$DRY" = "1" ] || echo "GREEN" > "$BUDGET_STATE"
 
+# 4b. Reset recall-fired dedup so reflexes re-fire each session.
+#     Without this, a pattern that fires once is dead system-wide forever.
+RECALL_FIRED="$STATE_DIR/recall-fired.txt"
+[ "$DRY" = "1" ] || : > "$RECALL_FIRED"
+
 # 5. Budget snapshot + lifecycle log line
 BUDGET=$(bash "$WORKSPACE/scripts/budget-peek.sh" --risk 2>/dev/null | head -1 || echo "budget-peek: n/a")
 SHORT_SID="${CURRENT_SID:0:8}"
