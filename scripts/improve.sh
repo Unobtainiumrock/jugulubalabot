@@ -23,6 +23,7 @@ set -uo pipefail
 
 WORKSPACE="/root/.openclaw/workspace"
 REPORTS="$WORKSPACE/reports"
+WORKTREES_DIR="$WORKSPACE/.claude/worktrees"
 TODAY="$(date -u +%Y-%m-%d)"
 NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 LOG="$REPORTS/improve-$TODAY.jsonl"
@@ -53,11 +54,35 @@ if [ -z "$candidate_body" ]; then
 fi
 
 branch="sepl/${TODAY}-${slug}"
+TEMP_WORKTREES=()
+
 log_attempt() {
   local result="$1" detail="$2"
   printf '{"ts":"%s","branch":"%s","slug":"%s","select":"%s","result":"%s","detail":%s}\n' \
     "$NOW_TS" "$branch" "$slug" "$select_id" "$result" \
     "$(printf '%s' "$detail" | jq -Rs .)" >> "$LOG"
+}
+
+cleanup_worktrees() {
+  local wt
+  for wt in "${TEMP_WORKTREES[@]:-}"; do
+    [ -n "$wt" ] || continue
+    git -C "$WORKSPACE" worktree remove --force "$wt" >/dev/null 2>&1 || rm -rf "$wt" >/dev/null 2>&1 || true
+  done
+  git -C "$WORKSPACE" worktree prune >/dev/null 2>&1 || true
+}
+trap cleanup_worktrees EXIT
+
+create_eval_worktree() {
+  local label="$1"
+  local rev="$2"
+  mkdir -p "$WORKTREES_DIR"
+  local wt
+  wt=$(mktemp -d "$WORKTREES_DIR/${label}.XXXXXX")
+  rm -rf "$wt"
+  git -C "$WORKSPACE" worktree add --detach "$wt" "$rev" >/dev/null 2>&1
+  TEMP_WORKTREES+=("$wt")
+  printf '%s\n' "$wt"
 }
 
 cd "$WORKSPACE"
@@ -116,12 +141,13 @@ fi
 baseline_cache="$REPORTS/eval-baseline-master-${master_sha}.fails"
 if [ ! -f "$baseline_cache" ]; then
   echo "improve: no baseline cache for master ${master_sha:0:7} — running eval on master"
-  git checkout -q master
+  baseline_wt=$(create_eval_worktree "baseline-master-${master_sha:0:7}" "$master_sha")
   baseline_log="$REPORTS/improve-${TODAY}-baseline-${master_sha:0:7}.eval.log"
-  bash "$WORKSPACE/evals/run.sh" > "$baseline_log" 2>&1
+  bash "$baseline_wt/evals/run.sh" > "$baseline_log" 2>&1
   base_exit=$?
   if [ "$base_exit" -eq 2 ]; then
     echo "improve: master baseline hit meta-shape guard — aborting" >&2
+    git checkout -q "$branch" 2>/dev/null || true
     git branch -q -D "$branch" 2>/dev/null || true
     log_attempt "abort_baseline_meta" "exit=$base_exit log=$baseline_log"
     exit 1
@@ -129,13 +155,13 @@ if [ ! -f "$baseline_cache" ]; then
   base_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$baseline_log")
   if [ -z "$base_run_dir" ] || [ ! -f "$base_run_dir/summary.tsv" ]; then
     echo "improve: baseline produced no summary.tsv — aborting" >&2
+    git checkout -q "$branch" 2>/dev/null || true
     git branch -q -D "$branch" 2>/dev/null || true
     log_attempt "abort_baseline_no_summary" "log=$baseline_log"
     exit 1
   fi
   awk -F'\t' 'NR>1 && $2=="FAIL"{print $1}' "$base_run_dir/summary.tsv" \
     | sort -u > "$baseline_cache"
-  git checkout -q "$branch"
 fi
 baseline_fail_count=$(wc -l < "$baseline_cache" | tr -d ' ')
 echo "improve: baseline on master ${master_sha:0:7} — ${baseline_fail_count} failing fixtures"
@@ -275,7 +301,9 @@ Subagent log: $subagent_log" \
 # that fails on the branch but passed on master. Same-or-better is green.
 echo "improve: running evals/run.sh as the gate"
 eval_log="$REPORTS/improve-${TODAY}-${slug}.eval.log"
-bash "$WORKSPACE/evals/run.sh" > "$eval_log" 2>&1
+candidate_sha=$(git rev-parse HEAD)
+branch_eval_wt=$(create_eval_worktree "improve-${slug}" "$candidate_sha")
+bash "$branch_eval_wt/evals/run.sh" > "$eval_log" 2>&1
 eval_exit=$?
 
 if [ "$eval_exit" -eq 2 ]; then
