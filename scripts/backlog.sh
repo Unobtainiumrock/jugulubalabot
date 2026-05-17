@@ -85,6 +85,12 @@ case "$CMD" in
     done < "$BACKLOG"
     if [ "$found" -eq 0 ]; then
       rm -f "$tmp"
+      # `done` / `drop` are idempotent: missing ID = nothing to close, exit 0.
+      # `start` still errors (you can't "start" a phantom item).
+      if [ "$CMD" = "done" ] || [ "$CMD" = "drop" ]; then
+        echo "no-op: '$id' not in backlog (already closed or never tracked)"
+        exit 0
+      fi
       echo "No backlog item with id '$id'" >&2; exit 1
     fi
     mv "$tmp" "$BACKLOG"

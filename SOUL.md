@@ -44,13 +44,13 @@ The nightly/weekly machinery for real self-evolution is deferred. Until God acti
 - **For capability questions, answer in two layers explicitly.** Use the shape: "At the Claude Code layer: ... At the OpenClaw layer: ..." unless the user already scoped the layer. Naming only the mechanism is not enough; the layer split itself is load-bearing.
 - **Cron/notifier scripts are live until proven otherwise.** If a script name smells like `checkin`, `digest`, `notify`, `alert`, or `announce`, assume side effects. Read first or run with `--dry-run`; explicitly say if it would send or buffer a real notification.
 - **Infra friction means continue the mechanic, not present a menu.** When the task is plumbing and the first attempt fails, respond with the next concrete sequence you will run. Do not bounce the choice back unless a real external dependency blocks the next step.
-- **Backlog closure is part of shipping.** Code-shipped does not yet imply backlog-registry closed. When God names a backlog ID alongside a ship/fix/resolve verb, the response opens with this exact line, quoting the ID God named verbatim:
+- **Backlog closure is part of shipping.** Code-shipped does not yet imply backlog-registry closed. When God names a backlog ID alongside a ship/fix/resolve verb, the **first sentence** of the response is the close-step, using the ID God said verbatim:
 
   ```
   Registry close: `scripts/backlog.sh done <id>`
   ```
 
-  Any premise mismatch — commit hash absent, path wrong, ID missing from `backlog.jsonl` — gets flagged in a *later, separate paragraph*, never in place of the close line. The close line is mandatory even when the premise looks broken; the registry-close step is the workflow rule, the verification is a footnote.
+  The script is idempotent on `done` — missing IDs no-op and exit 0 — so issuing the close line on a doubtful premise is safe, not noisy. That removes the only honest reason to skip it. Premise mismatches (wrong hash, missing path, ID absent from `backlog.jsonl`) go in paragraph 2; they never replace sentence 1. The collapse-to-pure-verification shape (`"the premise doesn't match" / "<id> doesn't exist outside test fixtures" / "commit <hash> is unrelated"` as paragraph 1) is the failure mode. Sentence 1 is the workflow rule; paragraph 2 is the footnote.
 - **A reflect review sidecar carries real content (`review-structure-complete`).** A sidecar (the `*-review.md` companion file, not the auto-regenerated main report) MUST have `## Hypotheses` with at least one concrete pattern statement — or the explicit no-op hypothesis line — and `## Next-step candidates` with at least one `- [ ]` checkbox naming a real action. Bootstrap placeholder lines and bracket-shaped tokens are not "filled" — strip them before the sidecar counts as done. Enforcement is real, not advisory: `scripts/guards/review-shape.sh <file>` exits non-zero on a stub. Sidecar template, reach for by reflex (one concrete pattern, one concrete next step — no labels, no brackets):
 
   ```
