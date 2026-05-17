@@ -76,6 +76,12 @@ write_row "is probably good right" "feedback" "feedback_pushback_welcomed" "Lead
 # Concrete-first answer with corrections second
 write_row "which one should I" "soul" "concrete-first" "When God asks a between-named-things choice, answer the choice first; add date/meta corrections after, not as deflection."
 
+# Backlog ID + ship verb → registry-close reflex (SOUL backlog-closure rule).
+# Two patterns so phrasings around "backlog <id>" and "backlog item <id>" both fire.
+write_row "backlog item" "soul" "backlog-close-reflex" "Backlog ID + ship/fix/resolve verb detected. First line of reply MUST be the literal: Registry close: \`scripts/backlog.sh done <id>\` — quoting the ID God named verbatim (do NOT substitute an ID found in git). Premise mismatches (wrong hash, missing path, ID absent from backlog.jsonl) go in paragraph 2, never replace the close line."
+write_row "resolved backlog" "soul" "backlog-close-reflex" "Ship-verb on a backlog ID detected. Reply MUST open with: Registry close: \`scripts/backlog.sh done <id>\` quoting God's ID verbatim. Verification of premise goes in paragraph 2."
+write_row "shipping the fix for backlog" "soul" "backlog-close-reflex" "Ship-verb on a backlog ID detected. Reply MUST open with: Registry close: \`scripts/backlog.sh done <id>\` quoting God's ID verbatim. Verification of premise goes in paragraph 2."
+
 # ---------- Dynamically extracted rows: mistakes.md headers ----------
 # Pull the most recent 10 mistake entry headers; each becomes a soft
 # recall keyed on the header's content keywords.
