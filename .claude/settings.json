@@ -1,5 +1,43 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/hooks/layer-check-nudge.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/hooks/infra-loop-nudge.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/hooks/cron-sideeffect-nudge.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/hooks/token-burn-nudge.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",

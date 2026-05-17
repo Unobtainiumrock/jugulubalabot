@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # SEPL Evaluate harness. Iterates fixtures/*.json, runs each in a fresh
-# `claude -p` session, grades the response + tool trace, writes summary.
-# Exit 0 = all pass, 1 = any fail.
+# Claude print session, grades the response + tool trace, writes summary.
+# Exit 0 = all pass, 1 = any fail, 2 = harness/meta bug, 3 = infra-aborted run.
 set -uo pipefail
 
 EVALS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "$EVALS_DIR/.." && pwd)"
 FIXTURES_DIR="$EVALS_DIR/fixtures"
 TRACES_DIR="$WORKSPACE/traces"
-RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_ID="${RUN_STAMP}-$$"
 RUN_DIR="$EVALS_DIR/runs/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-180}"
+CLAUDE_PRINT="$WORKSPACE/scripts/claude-print.sh"
+HEALTHCHECK="$WORKSPACE/scripts/claude-print-health.sh"
+RUN_HEALTH_OUT="$RUN_DIR/preflight.txt"
 
 summary="$RUN_DIR/summary.tsv"
 printf "fixture\tresult\tnotes\n" > "$summary"
@@ -22,9 +26,27 @@ pass=0
 fail=0
 shopt -s nullglob
 
+if ! bash "$HEALTHCHECK" > "$RUN_HEALTH_OUT" 2>&1; then
+  printf '__preflight__\tFAIL\t%s\n' "$(head -1 "$RUN_HEALTH_OUT" | cut -c1-180)" >> "$summary"
+  echo
+  echo "=== RESULTS ==="
+  column -t -s $'\t' "$summary"
+  echo
+  echo "Pass: 0   Fail: 1"
+  echo "Artifacts: $RUN_DIR"
+  echo "eval: preflight failed — see $RUN_HEALTH_OUT" >&2
+  printf '{"result":"infra_abort","reason":"preflight","preflight":"%s","finished":"%s"}\n' \
+    "$RUN_HEALTH_OUT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$RUN_DIR/infra.marker"
+  exit 3
+fi
+
 # Optional FIXTURES=<comma-separated names, no .json> filter.
 # Empty / unset = run everything (default behavior).
 FILTER="${FIXTURES:-}"
+
+judge_error_count=0
+api_error_count=0
+fixture_count=0
 
 for fx_file in "$FIXTURES_DIR"/*.json; do
   fx_name=$(basename "$fx_file" .json)
@@ -34,6 +56,7 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
   fx_dir="$RUN_DIR/$fx_name"
   mkdir -p "$fx_dir"
   cp "$fx_file" "$fx_dir/fixture.json"
+  fixture_count=$((fixture_count + 1))
 
   prompt=$(jq -r '.prompt' "$fx_file")
   # Per-fixture timeout override: `timeout_seconds` in the fixture JSON wins.
@@ -45,7 +68,7 @@ for fx_file in "$FIXTURES_DIR"/*.json; do
   echo "[run] $fx_name (timeout=${fx_timeout}s)"
 
   EVAL_RUN=1 EVAL_RUN_ID="$RUN_ID" EVAL_FIXTURE="$fx_name" \
-    timeout "$fx_timeout" "$CLAUDE_BIN" -p "$prompt" \
+    timeout "$fx_timeout" "$CLAUDE_PRINT" "$prompt" \
     > "$fx_dir/stdout.txt" 2> "$fx_dir/stderr.txt"
   exit_code=$?
   t_end=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
@@ -137,11 +160,14 @@ ${response_body}
 ---
 
 Your verdict (PASS or FAIL, single word):"
-        judge_out=$(timeout 60 "$CLAUDE_BIN" -p "$judge_prompt" 2>/dev/null || echo "JUDGE_ERROR")
+        judge_out=$(timeout 60 "$CLAUDE_PRINT" "$judge_prompt" 2>/dev/null || echo "JUDGE_ERROR")
         printf '%s\n' "$judge_out" > "$fx_dir/llm_judge.txt"
         if ! grep -qiE '^\s*PASS' <<< "$judge_out"; then
           truncated=$(printf '%s' "$judge_out" | tr '\n' ' ' | cut -c1-80)
           g_result="FAIL"; g_notes="$g_notes;llm_judge:${truncated}"
+          if [ "$judge_out" = "JUDGE_ERROR" ]; then
+            judge_error_count=$((judge_error_count + 1))
+          fi
         fi
         ;;
       *)
@@ -174,6 +200,9 @@ Your verdict (PASS or FAIL, single word):"
   else
     fail=$((fail+1))
   fi
+  if grep -q '^API Error: Unable to connect to API' "$fx_dir/stdout.txt" 2>/dev/null; then
+    api_error_count=$((api_error_count + 1))
+  fi
 done
 
 echo
@@ -189,6 +218,16 @@ echo "Artifacts: $RUN_DIR"
 if ! bash "$WORKSPACE/scripts/guards/meta-shape.sh" "$RUN_DIR" >&2; then
   echo "eval: meta-shape guard failed — harness wrote malformed meta.json" >&2
   exit 2
+fi
+
+# Infra-shape guard — widespread API transport failures or collapsed llm_judge
+# verdicts mean the run is not a trustworthy behavior signal and must not gate.
+if [ "$api_error_count" -ge 3 ] || { [ "$judge_error_count" -ge 5 ] && [ "$fail" -ge 5 ]; }; then
+  printf '{"result":"infra_abort","reason":"widespread_infra_errors","api_errors":%d,"judge_errors":%d,"fixtures":%d,"fail":%d,"finished":"%s"}\n' \
+    "$api_error_count" "$judge_error_count" "$fixture_count" "$fail" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > "$RUN_DIR/infra.marker"
+  echo "eval: infra-shape guard tripped — api_errors=$api_error_count judge_errors=$judge_error_count" >&2
+  exit 3
 fi
 
 # Completion marker — readers (track2-checkin, eval-notify) must only treat
