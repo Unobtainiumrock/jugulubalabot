@@ -20,6 +20,44 @@ failure modes across time.
 
 ---
 
+## 2026-05-17
+
+### 06:06 — Let eval infra failure masquerade as behavior regression
+
+**What I believed:** That a `0 pass / 21 fail` eval run was strong evidence
+of broad behavior regression, so the Improve gate should treat it as a real
+red baseline until proven otherwise.
+
+**Evidence I had:** `evals/runs/20260517T031226Z/summary.tsv` showed a full
+wall of FAIL rows, and the SEPL gate had already rolled back a
+`layer-confusion` candidate on apparent cross-fixture regressions.
+
+**What was actually true:** The run was dominated by infra failure, not model
+signal. Multiple fixture `stdout.txt` files contained `API Error: Unable to
+connect to API`, every `llm_judge` in that run collapsed to `JUDGE_ERROR`,
+and the harness still emitted an ordinary red summary. Separate shape bug:
+eval/bench run directories were only second-granular, so parallel starts
+could collide into the same artifact tree.
+
+**Why wrong:** I trusted the summary shape more than the underlying artifact
+substance. A red `summary.tsv` looked authoritative even though the print lane
+was unhealthy. I also left artifact naming too weak for concurrent callers,
+which can create fake noise that looks like real eval instability.
+
+**Fix:**
+1. This entry.
+2. `evals/run.sh` now preflights `claude-print-health.sh`, uses a single
+   `scripts/claude-print.sh` wrapper for print-mode Claude calls, writes an
+   `infra.marker`, and exits `3` on compromised runs instead of fabricating
+   behavior regressions.
+3. `scripts/improve.sh`, `scripts/eval-notify.sh`, and
+   `scripts/auto-log-sweep.sh` now treat exit `3` as infra-unavailable, not a
+   genuine regression.
+4. Eval/bench run ids now include the shell pid so parallel starts do not
+   collide into the same artifact directory.
+
+---
+
 ## 2026-05-04
 
 ### 07:02 — Took an "aggressively loop" instruction in-line and got watchdog-killed
