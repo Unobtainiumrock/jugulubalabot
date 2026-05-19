@@ -60,6 +60,29 @@ REVIEW_BOOTSTRAP_NOTE=""
 if [ -z "${LATEST:-}" ] || [ ! -f "$SUMMARY" ]; then
   MSG="Eval regression: harness exited $EXIT but no summary.tsv was found. Check $WORKSPACE/evals/runs/."
 else
+  if [ "$EXIT" -eq 3 ]; then
+    INFRA_MARKER="$WORKSPACE/evals/runs/${LATEST}/infra.marker"
+    PRETTY_REASON="eval lane unavailable"
+    if [ -f "$INFRA_MARKER" ]; then
+      reason=$(jq -r '.reason // ""' "$INFRA_MARKER" 2>/dev/null)
+      case "$reason" in
+        preflight) PRETTY_REASON="print/API preflight failed before the run started" ;;
+        widespread_infra_errors) PRETTY_REASON="the run was dominated by API/judge transport errors, so it was discarded" ;;
+      esac
+    fi
+    MSG="Eval lane unavailable — run $LATEST
+
+What happened:
+- $PRETTY_REASON
+
+What this means:
+- this was not treated as a real behavior regression
+- the raw artifacts stay on disk for triage
+
+Pointers:
+- Artifacts: $WORKSPACE/evals/runs/$LATEST/
+- Healthcheck: bash $WORKSPACE/scripts/claude-print-health.sh"
+  else
   if BOOTSTRAP_OUT=$(bash "$WORKSPACE/scripts/eval-review-bootstrap.sh" "$LATEST" 2>/dev/null); then
     REVIEW_BOOTSTRAP_NOTE="Review bootstrap:
 - $BOOTSTRAP_OUT
@@ -111,6 +134,7 @@ ${REVIEW_BOOTSTRAP_NOTE}
 For me, the full machine-readable triage is still useful, but the raw alert is mostly a pointer:
 - Triage: bash $WORKSPACE/scripts/eval-triage.sh $LATEST
 - Artifacts: $WORKSPACE/evals/runs/$LATEST/"
+  fi
 fi
 
 # Telegram caps at 4096; leave headroom for any server-side framing.

@@ -152,6 +152,13 @@ if [ ! -f "$baseline_cache" ]; then
     log_attempt "abort_baseline_meta" "exit=$base_exit log=$baseline_log"
     exit 1
   fi
+  if [ "$base_exit" -eq 3 ]; then
+    echo "improve: master baseline aborted on eval infra guard — aborting" >&2
+    git checkout -q "$branch" 2>/dev/null || true
+    git branch -q -D "$branch" 2>/dev/null || true
+    log_attempt "abort_baseline_infra" "exit=$base_exit log=$baseline_log"
+    exit 1
+  fi
   base_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$baseline_log")
   if [ -z "$base_run_dir" ] || [ ! -f "$base_run_dir/summary.tsv" ]; then
     echo "improve: baseline produced no summary.tsv — aborting" >&2
@@ -313,6 +320,12 @@ if [ "$eval_exit" -eq 2 ]; then
   log_attempt "rollback_meta_guard" "eval_exit=$eval_exit log=$eval_log"
   exit 1
 fi
+if [ "$eval_exit" -eq 3 ]; then
+  echo "improve: branch eval aborted on infra guard — leaving branch $branch for retry"
+  git checkout -q master
+  log_attempt "abort_eval_infra" "eval_exit=$eval_exit log=$eval_log"
+  exit 2
+fi
 
 branch_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$eval_log")
 if [ -z "$branch_run_dir" ] || [ ! -f "$branch_run_dir/summary.tsv" ]; then
@@ -344,7 +357,14 @@ if [ "$reg_count" -gt 0 ] && [ "$consensus_n" -ge 2 ]; then
   reg_filter=$(printf '%s' "$regressions" | tr '\n' ',' | sed 's/,$//')
   echo "improve: $reg_count first-run regression(s): $reg_filter — re-running for N=$consensus_n consensus"
   consensus_log="$REPORTS/improve-${TODAY}-${slug}.consensus.log"
-  FIXTURES="$reg_filter" bash "$WORKSPACE/evals/run.sh" > "$consensus_log" 2>&1 || true
+  FIXTURES="$reg_filter" bash "$WORKSPACE/evals/run.sh" > "$consensus_log" 2>&1
+  consensus_exit=$?
+  if [ "$consensus_exit" -eq 3 ]; then
+    echo "improve: consensus re-run aborted on infra guard — leaving branch $branch for retry"
+    git checkout -q master
+    log_attempt "abort_consensus_infra" "eval_exit=$consensus_exit log=$consensus_log regressions=$reg_filter"
+    exit 2
+  fi
   consensus_run_dir=$(awk '/^Artifacts: /{print $2; exit}' "$consensus_log")
   if [ -n "$consensus_run_dir" ] && [ -f "$consensus_run_dir/summary.tsv" ]; then
     consensus_fails_file=$(mktemp)
