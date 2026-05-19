@@ -111,10 +111,14 @@ for d in "$TODAY" "$YDAY"; do
   last_exit=$(grep -E '^=== eval-notify .* exit=' "$log" | tail -1 | sed -E 's/.*exit=([0-9]+).*/\1/')
   [ -z "$last_exit" ] && continue
   if [ "$last_exit" != "0" ]; then
-    # Pull the "Score:" line out of the latest block for context.
-    score_line=$(awk '/^=== eval-notify /{block=""} {block=block"\n"$0} END{print block}' "$log" \
-      | grep -E '^- [0-9]+ failed' | head -1)
-    attn+=("Eval regression $d: ${score_line:-non-zero exit (see $log)}")
+    latest_block=$(awk '/^=== eval-notify /{block=""} {block=block"\n"$0} END{print block}' "$log")
+    if [ "$last_exit" = "3" ]; then
+      first_line=$(printf '%s' "$latest_block" | grep -E '^Eval lane unavailable' | head -1)
+      attn+=("Eval lane $d: ${first_line:-infra-unavailable run (see $log)}")
+    else
+      score_line=$(printf '%s' "$latest_block" | grep -E '^- [0-9]+ failed' | head -1)
+      attn+=("Eval regression $d: ${score_line:-non-zero exit (see $log)}")
+    fi
   fi
 done
 

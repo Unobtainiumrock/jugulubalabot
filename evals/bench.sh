@@ -3,20 +3,13 @@ set -euo pipefail
 
 EVALS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="$EVALS_DIR/benchmarks"
-RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_ID="${RUN_STAMP}-$$"
 RUN_DIR="$EVALS_DIR/bench-runs/$RUN_ID"
-CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-180}"
 HEALTHCHECK="$EVALS_DIR/../scripts/claude-print-health.sh"
+CLAUDE_PRINT="$EVALS_DIR/../scripts/claude-print.sh"
 mkdir -p "$RUN_DIR"
-
-BENCH_IS_SANDBOX="${IS_SANDBOX:-}"
-if [ -z "$BENCH_IS_SANDBOX" ] && [ "$(id -u)" -eq 0 ]; then
-  default_mode=$(jq -r '.permissions.defaultMode // empty' /root/.claude/settings.json 2>/dev/null || true)
-  if [ "$default_mode" = "bypassPermissions" ]; then
-    BENCH_IS_SANDBOX="1"
-  fi
-fi
 
 list_tasks() {
   find "$BENCH_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
@@ -39,7 +32,7 @@ fail=0
 
 health_out="$RUN_DIR/preflight.txt"
 set +e
-IS_SANDBOX="$BENCH_IS_SANDBOX" bash "$HEALTHCHECK" > "$health_out" 2>&1
+bash "$HEALTHCHECK" > "$health_out" 2>&1
 health_rc=$?
 set -e
 if [ "$health_rc" -ne 0 ]; then
@@ -68,7 +61,7 @@ for task_dir in "$BENCH_DIR"/*; do
   cp "$prompt_file" "$out_dir/prompt.md"
   prompt=$(cat "$prompt_file")
   set +e
-  IS_SANDBOX="$BENCH_IS_SANDBOX" timeout "$TIMEOUT_SECS" "$CLAUDE_BIN" -p "$prompt" > "$out_dir/stdout.txt" 2> "$out_dir/stderr.txt"
+  timeout "$TIMEOUT_SECS" "$CLAUDE_PRINT" "$prompt" > "$out_dir/stdout.txt" 2> "$out_dir/stderr.txt"
   exit_code=$?
   set -e
   result="PASS"
