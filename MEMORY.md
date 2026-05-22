@@ -53,3 +53,12 @@
 
 <!-- openclaw-memory-promotion:memory:memory/2026-05-11.md:1:1 -->
 - 2026-05-11 [score=0.877 recalls=0 avg=0.620 source=memory/2026-05-11.md:1-1]
+
+## Promoted From Short-Term Memory (2026-05-22)
+
+<!-- openclaw-memory-promotion:memory:memory/2026-05-17.md:6:6 -->
+- and exits `3` on compromised runs instead of reporting fake regressions. [score=0.870 recalls=0 avg=0.620 source=memory/2026-05-17.md:6-6]
+<!-- openclaw-memory-promotion:memory:memory/2026-05-17.md:7:7 -->
+- - `scripts/improve.sh`, `scripts/eval-notify.sh`, and `scripts/auto-log-sweep.sh` [score=0.870 recalls=0 avg=0.620 source=memory/2026-05-17.md:7-7]
+<!-- openclaw-memory-promotion:memory:memory/2026-05-17.md:8:8 -->
+- now treat eval exit `3` as infra-unavailable. [score=0.805 recalls=0 avg=0.620 source=memory/2026-05-17.md:8-8]
