@@ -36,6 +36,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.openclaw/workspace/scripts/hooks/backlog-close-nudge.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [
