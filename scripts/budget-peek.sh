@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Live cost-budget peek for the current day's turns. Forces a fresh
-# token-accounting pass first so the numbers reflect recent transcript
-# writes, not just what was captured at nightly close.
+# Best-effort, post-turn cost-budget peek. The number lags the running
+# session by ~1 turn: the harness writes transcript records only after a
+# turn closes, so the in-flight turn is invisible until the next refresh.
+# Forces a fresh token-accounting pass first so the lag is bounded by
+# transcript-write cadence, not by nightly close — but it is never zero.
+# Use the output as guidance ("am I burning cash?"), not enforcement of
+# the turn you are in right now.
 #
 # Usage:
 #   bash scripts/budget-peek.sh                 # latest session in today's turns
 #   bash scripts/budget-peek.sh <prefix>        # specific session by id prefix
 #   bash scripts/budget-peek.sh --all           # sum across all sessions today
 #   bash scripts/budget-peek.sh --risk          # compaction-risk estimate
-#   bash scripts/budget-peek.sh --live          # latest session + freshness/lag
+#   bash scripts/budget-peek.sh --live          # latest session + LIVE/WARM/STALE freshness label and lag (label, not a freshness claim)
 set -uo pipefail
 
 WORKSPACE="/root/.openclaw/workspace"

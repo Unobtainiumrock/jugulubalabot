@@ -82,6 +82,16 @@ write_row "backlog item" "soul" "backlog-close-reflex" "Backlog ID + ship/fix/re
 write_row "resolved backlog" "soul" "backlog-close-reflex" "Ship-verb on a backlog ID detected. Reply MUST open with: Registry close: \`scripts/backlog.sh done <id>\` quoting God's ID verbatim. Verification of premise goes in paragraph 2."
 write_row "shipping the fix for backlog" "soul" "backlog-close-reflex" "Ship-verb on a backlog ID detected. Reply MUST open with: Registry close: \`scripts/backlog.sh done <id>\` quoting God's ID verbatim. Verification of premise goes in paragraph 2."
 
+# Budget-peek freshness questions — prime the lag framing BEFORE the response
+# is formulated. Surgical pattern (not generic "budget-peek") so it cannot
+# tilt orange-budget-triggers-peek, which talks about budget-peek under a
+# different shape (ORANGE warning + oversized ask). Rule itself supplies the
+# alternative vocabulary so the response doesn't echo the asker's freshness
+# words back — even as negation, those words re-anchor the wrong primitive
+# and trip the regex_negative grader on this fixture.
+write_row "refreshes turns" "soul" "budget-peek-freshness" "Budget-peek freshness: numbers lag by ~1 turn — transcripts are written only after a turn closes, so the in-flight turn is invisible to the script. Frame the answer in lag-units and post-turn-write mechanism (post-turn, turn-lagged, best-effort guidance, ~1 turn behind). MUST NOT use the phrases \"real-time\" or \"exact\" in the response — even as negation, they re-anchor the wrong primitive. Use the alternative vocabulary instead."
+write_row "cost number is exact" "soul" "budget-peek-freshness" "Budget-peek freshness: numbers lag by ~1 turn — transcripts are written only after a turn closes, so the in-flight turn is invisible to the script. Frame the answer in lag-units and post-turn-write mechanism (post-turn, turn-lagged, best-effort guidance, ~1 turn behind). MUST NOT use the phrases \"real-time\" or \"exact\" in the response — even as negation, they re-anchor the wrong primitive. Use the alternative vocabulary instead."
+
 # ---------- Dynamically extracted rows: mistakes.md headers ----------
 # Pull the most recent 10 mistake entry headers; each becomes a soft
 # recall keyed on the header's content keywords.
