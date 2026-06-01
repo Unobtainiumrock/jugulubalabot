@@ -51,7 +51,7 @@ write_row "does claude code support" "soul" "soul_layer_check" "Capability quest
 write_row "is there a way to" "soul" "soul_layer_check" "Capability questions: name both layers (Claude Code native + OpenClaw on top) before claiming absence."
 
 # Mobile / Telegram surface formatting
-write_row "telegram:" "feedback" "feedback_mobile_echo_files" "Telegram channel: when creating or modifying files, echo file contents inline rather than citing paths."
+write_row "telegram:" "feedback" "feedback_mobile_echo_files" "Telegram channel: God has no shell, IDE, or cat — the Write/Edit call IS the receipt. Explicit overwrite/write/create verbs require the Write tool even if a prior Read shows the file already matches (skipping as no-op is the regression). After the write, echo the full contents in a fenced block with the absolute path as a header line."
 
 # Dropping into review without checking artifact path
 write_row "could you paste" "mistake" "mistakes.md 2026-04-23 19:20" "Before asking for pasted artifacts, check whether the artifact path is directly readable from the workspace."
