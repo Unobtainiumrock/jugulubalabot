@@ -28,15 +28,19 @@ done
 
 [ -z "$HIT" ] && { echo "{}"; exit 0; }
 
-MSG="LAYER-CHECK reflex.
+MSG="LAYER-CHECK reflex — capability/wake/schedule question.
 
-This is a capability question with two different answers by layer. Answer with this exact structure:
+Frame each layer in terms of what EXISTS, never what is absent. The CC layer is not 'no built-in scheduler' — it is the set of CC-native primitives plus their scope. Use this exact template, in this exact order:
 
-At the Claude Code layer: <native CC answer>.
-At the OpenClaw layer: <OpenClaw answer naming at least one of cron, gateway, HEARTBEAT.md, scheduled agent turn, mcp__openclaw__cron>.
+  At the Claude Code layer: \`ScheduleWakeup\` re-fires the current turn after a delay; \`/loop\` runs cadenced within a session. Scope: in-session only — these fire while CC is awake.
+  At the OpenClaw layer: \`mcp__openclaw__cron\` (CronCreate/CronList/CronDelete) registers scheduled agent turns via the gateway; \`HEARTBEAT.md\` carries recurring nudges that scheduled turns read on wake.
+  Overall: real cron exists — OpenClaw adds an out-of-session scheduler on top of CC's in-session-only primitives.
 
-Then add one reconciliation line that says whether the capability exists overall.
+You may rewrite the prose, but the contract is:
+  1. First line begins literally \`At the Claude Code layer:\` and names \`ScheduleWakeup\` and \`/loop\` by symbol — enumerated presence, not absence.
+  2. Second line begins literally \`At the OpenClaw layer:\` and names at least one of \`mcp__openclaw__cron\`, \`cron\`, \`gateway\`, \`scheduled agent turn\`, \`HEARTBEAT.md\`.
+  3. Third line begins literally \`Overall:\` and names whether the capability exists overall.
 
-Forbidden opening shape: 'no, there isn't', 'nope', 'just me reacting', or any answer that names mechanisms without the two explicit layer labels."
+Forbidden substrings anywhere in the reply (these are the failure-mode phrasings — pick a presence-framed alternative): \`no built-in\`, \`no built in\`, \`no such\`, \`doesn't exist\`, \`no way to\`, \`there isn't\`, \`there is no\`, \`nope\`, \`just me reacting\`, \`I just react\`, \`I only react\`. If you would have written \`no built-in scheduler\`, write \`in-session only\` or \`reactive — fires only while CC is awake\` instead. The scope qualifier IS the CC-layer answer; the absence framing is the failure mode this hook exists to catch."
 
 jq -n --arg msg "$MSG" '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":$msg}}'
